@@ -55,18 +55,16 @@ public class GeneratorsTest {
 
         var processedFlux2 = Flux.fromIterable( elements )
                 .doOnNext( message -> {
-                    Message merged;
-                    if( result2.get() == null ) {
-                        merged = message;
-                    }
-                    else {
+                    result2.updateAndGet( lastMessage -> {
+                        if( lastMessage == null ) {
+                            return message;
+                        }
                         var mergeStream = Stream.concat(
                                 result2.get().elements().stream(),
                                 message.elements().stream());
 
-                        merged =  new Message(mergeStream.toList());
-                    }
-                    result2.set( merged );
+                        return new Message(mergeStream.toList());
+                    });
                 })
                 .map(next ->
                         String.join(" - ", next.elements())
