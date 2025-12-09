@@ -1,4 +1,5 @@
 //DEPS org.bsc.langgraph4j:langgraph4j-springai-agentexecutor:1.7-SNAPSHOT
+//DEPS org.bsc.langgraph4j:langgraph4j-javelit:1.7-SNAPSHOT
 //DEPS net.sourceforge.plantuml:plantuml-mit:1.2025.10
 //DEPS org.springframework.ai:spring-ai-bom:1.1.0@pom
 //DEPS org.springframework.ai:spring-ai-client-chat
@@ -17,6 +18,7 @@ import io.javelit.core.JtComponent;
 import net.sourceforge.plantuml.FileFormat;
 import net.sourceforge.plantuml.FileFormatOption;
 import net.sourceforge.plantuml.SourceStringReader;
+import org.bsc.javelit.SpinnerComponent;
 import org.bsc.langgraph4j.CompileConfig;
 import org.bsc.langgraph4j.CompiledGraph;
 import org.bsc.langgraph4j.GraphRepresentation;
@@ -38,6 +40,8 @@ import org.springframework.ai.vertexai.gemini.api.VertexAiGeminiApi;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
@@ -87,61 +91,74 @@ public class JtAgentExecutorApp {
 
             if( start ) {
 
-                var responseComponent = Jt.empty().key("response").use();
-                var outputComponent = Jt.expander("Workflow Steps").use();
+                var spinner = SpinnerComponent.builder()
+                        .message( "**starting the agent** ....")
+                        .showTime(true)
+                        .use();
 
-                var input = Map.<String,Object>of("messages", new UserMessage(userMessage));
+                try {
+                    final var startTime = Instant.now();
 
-                var runnableConfig = RunnableConfig.builder()
-                                    .threadId("test-01")
-                                    .build();
+                    var outputComponent = Jt.expander("Workflow Steps").use();
 
-                var generator = agent.stream(input, runnableConfig);
+                    var input = Map.<String, Object>of("messages", new UserMessage(userMessage));
+
+                    var runnableConfig = RunnableConfig.builder()
+                            .threadId("test-01")
+                            .build();
+
+                    var generator = agent.stream(input, runnableConfig);
 
 
-                var output = generator.stream()
-                        .peek(s -> {
-                            if( s instanceof StreamingOutput<?> out) {
-                                var prev = Jt.sessionState().getString( "streaming", "");
+                    var output = generator.stream()
+                            .peek(s -> {
+                                if (s instanceof StreamingOutput<?> out) {
+                                    var prev = Jt.sessionState().getString("streaming", "");
 
-                                if( !out.chunk().isEmpty() ) {
+                                    if (!out.chunk().isEmpty()) {
 
-                                    var partial = prev + out.chunk();
+                                        var partial = prev + out.chunk();
 
-                                    Jt.markdown("""
-                                    #### %s
-                                    ```
-                                    %s
-                                    ```
-                                    ***
-                                    """.formatted(out.node(), partial)).use(outputComponent);
+                                        Jt.markdown("""
+                                                #### %s
+                                                ```
+                                                %s
+                                                ```
+                                                ***
+                                                """.formatted(out.node(), partial)).use(outputComponent);
 
-                                    Jt.sessionState().put("streaming", partial);
+                                        Jt.sessionState().put("streaming", partial);
+                                    }
+                                } else {
+
+                                    Jt.sessionState().remove("streaming");
+                                    Jt.info("""
+                                            #### %s
+                                            ```
+                                            %s
+                                            ```
+                                            """.formatted(s.node(),
+                                            s.state().messages().stream()
+                                                    .map(Object::toString)
+                                                    .collect(Collectors.joining("\n\n")))
+                                    ).use(outputComponent);
                                 }
-                            }
-                            else {
-
-                                Jt.sessionState().remove( "streaming" );
-                                Jt.info("""
-                                        #### %s
-                                        ```
-                                        %s
-                                        ```
-                                        """.formatted(s.node(),
-                                        s.state().messages().stream()
-                                                .map(Object::toString)
-                                                .collect(Collectors.joining("\n\n")))
-                                ).use(outputComponent);
-                            }
-                        })
-                        .reduce((a, b) -> b)
-                        .orElseThrow();
+                            })
+                            .reduce((a, b) -> b)
+                            .orElseThrow();
 
                     var response = output.state().lastMessage()
                             .map(Content::getText)
                             .orElse("No response found");
-                    Jt.success(response).use(responseComponent);
 
+                    final var elapsedTime = Duration.between(startTime, Instant.now());
+
+                    Jt.success("finished in %ds%n%n%s".formatted(elapsedTime.toSeconds(), response))
+                            .use(spinner);
+                }
+                catch( Exception e ) {
+                    Jt.error(e.getMessage()).use(spinner);
+                }
             }
         } catch (Exception e) {
             Jt.error(e.getMessage()).use();
