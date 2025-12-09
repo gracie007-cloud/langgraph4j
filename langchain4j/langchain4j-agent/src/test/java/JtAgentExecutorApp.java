@@ -1,4 +1,5 @@
 //DEPS org.bsc.langgraph4j:langgraph4j-agent-executor:1.7-SNAPSHOT
+//DEPS org.bsc.langgraph4j:langgraph4j-javelit:1.7-SNAPSHOT
 //DEPS net.sourceforge.plantuml:plantuml-mit:1.2025.10
 //DEPS dev.langchain4j:langchain4j-bom:1.9.1@pom
 //DEPS dev.langchain4j:langchain4j-github-models
@@ -19,6 +20,7 @@ import io.javelit.core.JtComponent;
 import net.sourceforge.plantuml.FileFormat;
 import net.sourceforge.plantuml.FileFormatOption;
 import net.sourceforge.plantuml.SourceStringReader;
+import org.bsc.javelit.SpinnerComponent;
 import org.bsc.langgraph4j.CompileConfig;
 import org.bsc.langgraph4j.CompiledGraph;
 import org.bsc.langgraph4j.GraphRepresentation;
@@ -32,6 +34,8 @@ import org.bsc.langgraph4j.streaming.StreamingOutput;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
@@ -83,7 +87,11 @@ public class JtAgentExecutorApp {
 
             if( start ) {
 
-                var responseComponent = Jt.empty().key("response").use();
+                var spinner = SpinnerComponent.builder()
+                        .message( "**starting the agent** ....")
+                        .showTime(true)
+                        .use();
+
                 var outputComponent = Jt.expander("Workflow Steps").use();
 
                 var input = Map.<String,Object>of("messages", new UserMessage(userMessage));
@@ -95,48 +103,60 @@ public class JtAgentExecutorApp {
                 var generator = agent.stream(input, runnableConfig);
 
 
-                var output = generator.stream()
-                        .peek(s -> {
-                            if( s instanceof StreamingOutput<?> out) {
-                                var prev = Jt.sessionState().getString( "streaming", "");
+                try {
 
-                                if( !out.chunk().isEmpty() ) {
+                    final var startTime = Instant.now();
 
-                                    var partial = prev + out.chunk();
+                    var output = generator.stream()
+                            .peek(s -> {
+                                if (s instanceof StreamingOutput<?> out) {
+                                    var prev = Jt.sessionState().getString("streaming", "");
 
-                                    Jt.markdown("""
-                                    #### %s
-                                    ```
-                                    %s
-                                    ```
-                                    ***
-                                    """.formatted(out.node(), partial)).use(outputComponent);
+                                    if (!out.chunk().isEmpty()) {
 
-                                    Jt.sessionState().put("streaming", partial);
+                                        var partial = prev + out.chunk();
+
+                                        Jt.markdown("""
+                                                #### %s
+                                                ```
+                                                %s
+                                                ```
+                                                ***
+                                                """.formatted(out.node(), partial)).use(outputComponent);
+
+                                        Jt.sessionState().put("streaming", partial);
+                                    }
+                                } else {
+
+                                    Jt.sessionState().remove("streaming");
+                                    Jt.info("""
+                                            #### %s
+                                            ```
+                                            %s
+                                            ```
+                                            """.formatted(s.node(),
+                                            s.state().messages().stream()
+                                                    .map(Object::toString)
+                                                    .collect(Collectors.joining("\n\n")))
+                                    ).use(outputComponent);
                                 }
-                            }
-                            else {
+                            })
+                            .reduce((a, b) -> b)
+                            .orElseThrow();
 
-                                Jt.sessionState().remove( "streaming" );
-                                Jt.info("""
-                                        #### %s
-                                        ```
-                                        %s
-                                        ```
-                                        """.formatted(s.node(),
-                                        s.state().messages().stream()
-                                                .map(Object::toString)
-                                                .collect(Collectors.joining("\n\n")))
-                                ).use(outputComponent);
-                            }
-                        })
-                        .reduce((a, b) -> b)
-                        .orElseThrow();
 
                     var response = output.state().lastMessage()
                             .map(Object::toString)
                             .orElse("No response found");
-                    Jt.success(response).use(responseComponent);
+
+                    final var elapsedTime = Duration.between(startTime, Instant.now());
+
+                    Jt.success("finished in %ds%n%n%s".formatted(elapsedTime.toSeconds(), response))
+                            .use(spinner);
+                }
+                catch( Exception e ) {
+                    Jt.error(e.getMessage()).use(spinner);
+                }
 
             }
         } catch (Exception e) {
