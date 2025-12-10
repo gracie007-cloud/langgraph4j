@@ -12,12 +12,9 @@
 //SOURCES org/bsc/langgraph4j/spring/ai/agentexecutor/TestTools.java
 //SOURCES org/bsc/langgraph4j/spring/ai/agentexecutor/gemini/TestTools4Gemini.java
 
-import io.javelit.components.media.ImageComponent;
 import io.javelit.core.Jt;
 import io.javelit.core.JtComponent;
-import net.sourceforge.plantuml.FileFormat;
-import net.sourceforge.plantuml.FileFormatOption;
-import net.sourceforge.plantuml.SourceStringReader;
+import org.bsc.javelit.JtPlantUMLImage;
 import org.bsc.javelit.SpinnerComponent;
 import org.bsc.langgraph4j.CompileConfig;
 import org.bsc.langgraph4j.CompiledGraph;
@@ -27,10 +24,9 @@ import org.bsc.langgraph4j.checkpoint.MemorySaver;
 import org.bsc.langgraph4j.spring.ai.agentexecutor.AgentExecutor;
 import org.bsc.langgraph4j.spring.ai.agentexecutor.AiModel;
 import org.bsc.langgraph4j.spring.ai.agentexecutor.TestTools;
-import org.bsc.langgraph4j.spring.ai.agentexecutor.gemini.LogProbsSerializer;
 import org.bsc.langgraph4j.spring.ai.agentexecutor.gemini.TestTools4Gemini;
 import org.bsc.langgraph4j.spring.ai.serializer.std.SpringAIStateSerializer;
-import org.bsc.langgraph4j.state.AgentState;
+import org.bsc.langgraph4j.spring.ai.serializer.std.gemini.LogProbsSerializer;
 import org.bsc.langgraph4j.streaming.StreamingOutput;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
@@ -38,11 +34,8 @@ import org.springframework.ai.content.Content;
 import org.springframework.ai.vertexai.gemini.VertexAiGeminiChatModel;
 import org.springframework.ai.vertexai.gemini.api.VertexAiGeminiApi;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -68,13 +61,16 @@ public class JtAgentExecutorApp {
 
         Jt.divider("hr1").use();
 
-        if( chatModel.isEmpty() ) return;
+        if (chatModel.isEmpty()) return;
 
         try {
-            var agent = buildAgent( chatModel.get(), streaming );
+            var agent = buildAgent(chatModel.get(), streaming);
 
-            if( Jt.toggle("Show PlantUML Diagram").value(false).use() ) {
-                plantumlImage(agent).ifPresent(cb -> {
+            if (Jt.toggle("Show PlantUML Diagram").value(false).use()) {
+                JtPlantUMLImage.build(agent.getGraph(GraphRepresentation.Type.PLANTUML,
+                        "ReAct Agent",
+                        false))
+                .ifPresent(cb -> {
                     cb.use();
                     Jt.divider("plantuml-divider").use();
                 });
@@ -82,17 +78,17 @@ public class JtAgentExecutorApp {
 
             var userMessage = Jt.textArea("user message:")
                     .placeholder("user message")
-                    .labelVisibility( JtComponent.LabelVisibility.HIDDEN)
+                    .labelVisibility(JtComponent.LabelVisibility.HIDDEN)
                     .use();
 
             var start = Jt.button("start agent")
-                    .disabled( userMessage.isBlank() )
+                    .disabled(userMessage.isBlank())
                     .use();
 
-            if( start ) {
+            if (start) {
 
                 var spinner = SpinnerComponent.builder()
-                        .message( "**starting the agent** ....")
+                        .message("**starting the agent** ....")
                         .showTime(true)
                         .use();
 
@@ -155,8 +151,7 @@ public class JtAgentExecutorApp {
 
                     Jt.success("finished in %ds%n%n%s".formatted(elapsedTime.toSeconds(), response))
                             .use(spinner);
-                }
-                catch( Exception e ) {
+                } catch (Exception e) {
                     Jt.error(e.getMessage()).use(spinner);
                 }
             }
@@ -167,7 +162,7 @@ public class JtAgentExecutorApp {
     }
 
 
-    record Model( Provider provider, String name ) {
+    record Model(Provider provider, String name) {
         enum Provider {
             OLLAMA,
             OPENAI,
@@ -176,7 +171,7 @@ public class JtAgentExecutorApp {
         }
 
         public String apiKeyPlaceholder() {
-            return switch( provider ) {
+            return switch (provider) {
                 case OPENAI -> "OpenAI Api Key";
                 case OLLAMA -> "";
                 case VERTEX -> "Google Cloud Project Id";
@@ -186,7 +181,7 @@ public class JtAgentExecutorApp {
 
         @Override
         public String toString() {
-            return "%s:%s".formatted( provider.name().toLowerCase(), name );
+            return "%s:%s".formatted(provider.name().toLowerCase(), name);
         }
     }
 
@@ -201,29 +196,29 @@ public class JtAgentExecutorApp {
             if (cloud) {
                 var cloudModelCols = Jt.columns(2).key("cloud-model-cols").use();
                 var model = Jt.radio("Available models",
-                        List.of(
-                                new Model(Model.Provider.OPENAI, "gpt-4o-mini"),
-                                new Model(Model.Provider.GITHUB,"gpt-4o-mini"),
-                                new Model(Model.Provider.VERTEX,"gemini-2.5-pro")
-                        ))
+                                List.of(
+                                        new Model(Model.Provider.OPENAI, "gpt-4o-mini"),
+                                        new Model(Model.Provider.GITHUB, "gpt-4o-mini"),
+                                        new Model(Model.Provider.VERTEX, "gemini-2.5-pro")
+                                ))
                         .use(cloudModelCols.col(0));
 
                 var apikey = Jt.textInput("API KEY:")
                         .type("password")
                         .labelVisibility(JtComponent.LabelVisibility.HIDDEN)
-                        .placeholder( model.apiKeyPlaceholder() )
+                        .placeholder(model.apiKeyPlaceholder())
                         .width(500)
                         .use(cloudModelCols.col(1));
                 if (apikey.isEmpty()) {
-                    Jt.error("%s cannot be null".formatted( model.apiKeyPlaceholder() )).use();
+                    Jt.error("%s cannot be null".formatted(model.apiKeyPlaceholder())).use();
                     return Optional.empty();
                 }
-                if( model.provider()  == Model.Provider.VERTEX  ) {
+                if (model.provider() == Model.Provider.VERTEX) {
                     var gcpLocation = Jt.textInput("Google Cloud Location:")
                             .labelVisibility(JtComponent.LabelVisibility.HIDDEN)
-                            .placeholder( "Google Cloud Location" )
+                            .placeholder("Google Cloud Location")
                             .use(cloudModelCols.col(1));
-                    if( gcpLocation.isEmpty() ) {
+                    if (gcpLocation.isEmpty()) {
                         Jt.error("Google Cloud Location cannot be null").use();
                         return Optional.empty();
                     }
@@ -232,79 +227,53 @@ public class JtAgentExecutorApp {
                                     "GOOGLE_CLOUD_LOCATION", gcpLocation)));
 
                 }
-                if( model.provider() == Model.Provider.GITHUB  ) {
+                if (model.provider() == Model.Provider.GITHUB) {
                     return Optional.of(AiModel.GITHUB_MODEL.chatModel(model.name(), Map.of("GITHUB_MODELS_TOKEN", apikey)));
                 }
                 return Optional.of(AiModel.OPENAI.chatModel(model.name(), Map.of("OPENAI_API_KEY", apikey)));
             } else {
                 var model = Jt.radio("Available models", List.of(
-                                new Model(Model.Provider.OLLAMA,"qwen2.5:7b"),
-                                new Model(Model.Provider.OLLAMA,"qwen3:8b"),
-                                new Model(Model.Provider.OLLAMA,"gpt-oss:20b")
+                                new Model(Model.Provider.OLLAMA, "qwen2.5:7b"),
+                                new Model(Model.Provider.OLLAMA, "qwen3:8b"),
+                                new Model(Model.Provider.OLLAMA, "gpt-oss:20b")
                         ))
                         .use();
                 return Optional.of(AiModel.OLLAMA.chatModel(model.name()));
             }
-        }
-        catch( Throwable ex ) {
+        } catch (Throwable ex) {
             Jt.error(ex.getMessage()).use();
             return Optional.empty();
         }
 
     }
 
-    static Optional<ImageComponent.Builder> plantumlImage(CompiledGraph<? extends AgentState> agent ) {
-            var representation = agent.getGraph(GraphRepresentation.Type.PLANTUML,
-                    "ReAct Agent",
-                    false);
 
-            if( representation.content() == null ) {
-                Jt.error("plantuml representation is null").use();
-                return Optional.empty();
-            }
+    public CompiledGraph<AgentExecutor.State> buildAgent(ChatModel chatModel, boolean streaming) throws Exception {
+        var saver = new MemorySaver();
 
-            var reader = new SourceStringReader(representation.content());
+        var stateSerializer = new SpringAIStateSerializer<>(AgentExecutor.State::new);
+        // Fix problem with Gemini logprobs serialization
+        stateSerializer.mapper().register(VertexAiGeminiApi.LogProbs.class, new LogProbsSerializer());
 
-            // Output the image to a file and capture its description.
-            try (ByteArrayOutputStream out = new ByteArrayOutputStream(1024 * 1024 )) {
-                reader.outputImage(out, new FileFormatOption(FileFormat.PNG, true ) );
-                var base64Image = Base64.getEncoder().encodeToString(out.toByteArray());
-                var url =  "data:%s;base64,%s".formatted( FileFormat.PNG.getMimeType(),  base64Image );
+        var compileConfig = CompileConfig.builder()
+                .checkpointSaver(saver)
+                .build();
 
-                return Optional.of(Jt.image( url ));
-            } catch (IOException e) {
-                Jt.error("error processing plantuml representation %s".formatted(e.getMessage())).use();
-                return Optional.empty();
+        var agentBuilder = AgentExecutor.builder()
+                .stateSerializer(stateSerializer)
+                .chatModel(chatModel, streaming);
 
-            }
+        // FIX for GEMINI MODEL
+        if (chatModel instanceof VertexAiGeminiChatModel) {
+            agentBuilder.toolsFromObject(new TestTools4Gemini());
+        } else {
+            agentBuilder.toolsFromObject(new TestTools());
         }
 
-        public CompiledGraph<AgentExecutor.State> buildAgent( ChatModel chatModel, boolean streaming ) throws Exception {
-            var saver = new MemorySaver();
+        return agentBuilder
+                .build()
+                .compile(compileConfig);
 
-            var stateSerializer = new SpringAIStateSerializer<>(AgentExecutor.State::new);
-            // Fix problem with Gemini logprobs serialization
-            stateSerializer.mapper().register( VertexAiGeminiApi.LogProbs.class, new LogProbsSerializer() );
-
-            var compileConfig = CompileConfig.builder()
-                    .checkpointSaver(saver)
-                    .build();
-
-            var agentBuilder = AgentExecutor.builder()
-                    .stateSerializer(stateSerializer)
-                    .chatModel(chatModel, streaming);
-
-            // FIX for GEMINI MODEL
-            if (chatModel instanceof VertexAiGeminiChatModel) {
-                agentBuilder.toolsFromObject(new TestTools4Gemini());
-            } else {
-                agentBuilder.toolsFromObject(new TestTools());
-            }
-
-            return agentBuilder
-                    .build()
-                    .compile(compileConfig);
-
-        }
+    }
 
 }
