@@ -1,4 +1,4 @@
-package org.bsc.langgraph4j.spring.ai.agentexecutor.gemini;
+package org.bsc.langgraph4j.spring.ai.serializer.std.gemini;
 
 import org.bsc.langgraph4j.serializer.Serializer;
 import org.springframework.ai.vertexai.gemini.api.VertexAiGeminiApi;
