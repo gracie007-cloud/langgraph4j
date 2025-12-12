@@ -1,3 +1,5 @@
+//REPOS central-portal-snapshots=https://central.sonatype.com/repository/maven-snapshots/
+
 //DEPS org.bsc.langgraph4j:langgraph4j-springai-agentexecutor:1.7-SNAPSHOT
 //DEPS org.bsc.langgraph4j:langgraph4j-javelit:1.7-SNAPSHOT
 //DEPS net.sourceforge.plantuml:plantuml-mit:1.2025.10
@@ -11,8 +13,6 @@
 //SOURCES org/bsc/langgraph4j/spring/ai/agentexecutor/AiModel.java
 //SOURCES org/bsc/langgraph4j/spring/ai/agentexecutor/TestTools.java
 //SOURCES org/bsc/langgraph4j/spring/ai/agentexecutor/gemini/TestTools4Gemini.java
-
-//REPOS central-portal-snapshots=https://central.sonatype.com/repository/maven-snapshots/
 
 import io.javelit.core.Jt;
 import io.javelit.core.JtComponent;
