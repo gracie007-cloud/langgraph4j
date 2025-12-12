@@ -12,6 +12,8 @@
 //SOURCES org/bsc/langgraph4j/spring/ai/agentexecutor/TestTools.java
 //SOURCES org/bsc/langgraph4j/spring/ai/agentexecutor/gemini/TestTools4Gemini.java
 
+//REPOS central-portal-snapshots=https://central.sonatype.com/repository/maven-snapshots/
+
 import io.javelit.core.Jt;
 import io.javelit.core.JtComponent;
 import org.bsc.javelit.JtPlantUMLImage;
