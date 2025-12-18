@@ -70,6 +70,30 @@ public class ParallelNode<State extends AgentState> extends Node<State> {
             return CompletableFuture.supplyAsync(() -> evalNodeActionSync(action, state, config).join(), executor);
 
         }
+        private CompletableFuture<Void> allOfFailFast(CompletableFuture<?>... futures) {
+            CompletableFuture<Void> manager = new CompletableFuture<>();
+
+            for (CompletableFuture<?> future : futures) {
+                future.whenComplete((result, throwable) -> {
+                    if (throwable != null) {
+                        // One failed, so fail the manager immediately
+                        manager.completeExceptionally(throwable);
+                    } else {
+                        // Check if all others are done
+                        if (Stream.of(futures).allMatch(CompletableFuture::isDone)) {
+                            manager.complete(null);
+                        }
+                    }
+                });
+            }
+
+            // Handle the case of an empty array
+            if (futures.length == 0) {
+                manager.complete(null);
+            }
+
+            return manager;
+        }
 
         @Override
         public CompletableFuture<Map<String, Object>> apply(State state, RunnableConfig config) {
@@ -85,7 +109,7 @@ public class ParallelNode<State extends AgentState> extends Node<State> {
                     .map(evalNodeAction)
                     .toArray( CompletableFuture[]::new);
 
-            return CompletableFuture.allOf(actionsArray).thenApply(v ->
+            return allOfFailFast(actionsArray).thenApply(v ->
                     Stream.of(actionsArray)
                             .map(CompletableFuture::join)
                             .reduce( state.data(),
