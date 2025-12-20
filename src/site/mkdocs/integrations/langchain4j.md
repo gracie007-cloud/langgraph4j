@@ -32,6 +32,73 @@
 </dependency>
 ```
 
+## Share LangGraph4j's state to tools
+
+When you use [LangGraph4j] service `LC4jToolService` to invoke a tool you can pass the State throught the [LangChain4j] `InvocationParameters` see snippets below:
+
+
+```java
+//
+// Passing State information to the call
+//
+
+// create tool service
+var toolService = LC4jToolService.builder()
+                         .toolsFromObject( tools )
+                         .build();
+
+ToolExecutionRequest toolExecutionRequest = ... // The object returned by LLM response to notify tool invocation request
+
+Map<String,Object> state = Map.of( "arg1", "value1" )
+
+Command callResult = toolService.execute(
+                            List.of(toolExecutionRequest),
+                            InvocationContext.builder()
+                                    .invocationParameters(InvocationParameters.from(state))
+                                    .build()
+                            , "messages" ).join();
+ 
+```
+
+```java
+//
+// Retrieve State information from the tool
+//
+ class Tools {
+
+    @Tool("tool for test passing context")
+    String execTestWithContext(@P("test message") String message, InvocationParameters context ) {
+
+        assertNotNull( context );
+        assertEquals( "value1", context.get("arg1") );
+
+        return "test tool executed: %s with context".formatted( message );
+    }
+
+}
+```
+
+It is also possible update state from the tool using `SpringAIToolResponseBuilder` 
+
+```java
+class Tools {
+    //
+    // Update State information from the tool
+    //
+    @Tool("tool for test passing context and return command")
+    String execTestWithContextAndReturnCommand(@P("test message") String message, InvocationParameters context ) {
+
+        assertNotNull( context );
+        assertEquals( "value1", context.get("arg1") );
+
+        return LC4jToolResponseBuilder.of( context )
+                .update( Map.of( "arg2", "value2"))
+                .buildAndReturn( "test tool executed: %s with context".formatted(message) );
+    }
+}
+```
+
+
 ## ReACT Agent
 
 The **Agent Executor** is a **runtime for agents**.
