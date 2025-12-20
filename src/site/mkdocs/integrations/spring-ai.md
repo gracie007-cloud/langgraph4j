@@ -33,7 +33,7 @@
 </dependency>
 ```
 
-## Pass state to Tool
+## Share LangGraph4j's state to tools
 
 When you use [LangGraph4j] service `SpringAIToolService` to invoke a tool you can pass the State throught the [Spring AI] `ToolContext` see snippets below:
 
@@ -43,6 +43,7 @@ When you use [LangGraph4j] service `SpringAIToolService` to invoke a tool you ca
 // Passing State information to the call
 //
 
+// create tool service
 var toolService = new SpringAIToolService( List.of(tools) );
 
 AssistantMessage.ToolCall toolCall = ... // The object returned by LLM response to notify tool invocation request
@@ -54,39 +55,41 @@ Command callResult = toolService.executeFunctions( List.of(toolCall), state);
 ```
 
 ```java
-//
-// Retrieve State information from the tool
-//
-@Tool(description = "tool for test AI agent executor")
-String execTest2(@ToolParam(description = "test message") String message, ToolContext context ) {
+class Tools {
+    //
+    // Retrieve State information from the tool
+    //
+    @Tool(description = "tool for test AI agent executor")
+    String execTest(@ToolParam(description = "test message") String message, ToolContext context ) {
 
-    Map<String,Object> state = context.getContext();
+        Map<String,Object> state = context.getContext();
 
-    return format("test tool ('%s') executed", message);
+        return format("test tool ('%s') executed", message);
 
+    }
 }
-
 ```
 
 It is also possible update state from the tool using `SpringAIToolResponseBuilder` 
 
 ```java
-//
-// Update State information from the tool
-//
+class Tools {
+    //
+    // Update State information from the tool
+    //
 
-@Tool(description = "tool for test AI agent executor")
-String execTest2(@ToolParam(description = "test message") String message, ToolContext context ) {
+    @Tool(description = "tool for test AI agent executor")
+    String execTest2(@ToolParam(description = "test message") String message, ToolContext context ) {
 
-    return SpringAIToolResponseBuilder.of(context)
-            .update( Map.of( "arg0", message, "arg1", "execTest2" ) )
-            .buildAndReturn( format("test tool ('%s') executed", message) );
+        return SpringAIToolResponseBuilder.of(context)
+                .update( Map.of( "arg0", message, "arg1", "execTest2" ) )
+                .buildAndReturn( format("test tool ('%s') executed", message) );
+    }
 }
-
 ```
 
 
-## ReACT Agent 
+## ReACT Agent (aka AgentExecutor)
 
 This is an implementation of ReACT agent in [Spring AI] using Langgraph4j
 
