@@ -220,7 +220,7 @@ public class CompiledSubGraphTest {
     }
 
     @ParameterizedTest
-    @EnumSource( CompiledGraph.StreamMode.class     )
+    @EnumSource( CompiledGraph.StreamMode.class )
     public void testCompileSubGraphInterruptionSharingSaver(  CompiledGraph.StreamMode mode ) throws Exception {
 
         var saver = new MemorySaver();
@@ -270,9 +270,10 @@ public class CompiledSubGraphTest {
         assertTrue( iteratorResult.isPresent() );
         assertInstanceOf(InterruptionMetadata.class, iteratorResult.get());
 
-        runnableConfig = parentGraph.updateState( runnableConfig, Map.of( "newAttribute", "<myNewValue>") );
+        // runnableConfig = parentGraph.updateState( runnableConfig, Map.of( "newAttribute", "<myNewValue>") );
+        //input = GraphInput.resume();
 
-        input = GraphInput.resume();
+        input = GraphInput.resume(Map.of( "newAttribute", "<myNewValue>"));
 
         graphIterator = parentGraph.stream(input, runnableConfig);
 
@@ -346,10 +347,10 @@ public class CompiledSubGraphTest {
         assertTrue( iteratorResult.isPresent() );
         assertInstanceOf(InterruptionMetadata.class, iteratorResult.get());
 
-        runnableConfig = parentGraph.updateState( runnableConfig, Map.of( "newAttribute", "<myNewValue>") );
+        // runnableConfig = parentGraph.updateState( runnableConfig, Map.of( "newAttribute", "<myNewValue>") );
+        // input = GraphInput.resume();
 
-        input = GraphInput.resume();
-
+        input = GraphInput.resume( Map.of( "newAttribute", "<myNewValue>") );
         graphIterator = parentGraph.stream(input, runnableConfig);
 
         output = graphIterator.stream()
