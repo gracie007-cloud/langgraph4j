@@ -872,7 +872,7 @@ public final class CompiledGraph<State extends AgentState> implements GraphDefin
                 if( action instanceof InterruptableAction<?>) {
                     @SuppressWarnings("unchecked")
                     final var interruption = (InterruptableAction<State>) action;
-                    final var interruptMetadata = interruption.interrupt(context.currentNodeId(), cloneState(context.currentState()));
+                    final var interruptMetadata = interruption.interrupt(context.currentNodeId(), cloneState(context.currentState()), this.config );
                     if( interruptMetadata.isPresent() ) {
                         return Data.done( interruptMetadata.get() );
                     }
