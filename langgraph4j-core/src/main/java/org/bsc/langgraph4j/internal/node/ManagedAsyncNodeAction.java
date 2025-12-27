@@ -1,7 +1,5 @@
 package org.bsc.langgraph4j.internal.node;
 
-import org.bsc.langgraph4j.CompileConfig;
-import org.bsc.langgraph4j.GraphStateException;
 import org.bsc.langgraph4j.RunnableConfig;
 import org.bsc.langgraph4j.action.AsyncNodeActionWithConfig;
 import org.bsc.langgraph4j.action.InterruptableAction;
@@ -16,13 +14,13 @@ import java.util.concurrent.CompletableFuture;
 
 import static java.util.Objects.requireNonNull;
 
-public class ManagedAsyncNodeActionWithConfig<State extends AgentState> implements AsyncNodeActionWithConfig<State> {
+public class ManagedAsyncNodeAction<State extends AgentState> implements AsyncNodeActionWithConfig<State> {
 
     public final NodeHooks<State> hooks = new NodeHooks<>();
 
     protected final AsyncNodeActionWithConfig<State> delegate;
 
-    public ManagedAsyncNodeActionWithConfig(String nodeId, AsyncNodeActionWithConfig<State> delegate) {
+    public ManagedAsyncNodeAction(String nodeId, AsyncNodeActionWithConfig<State> delegate) {
         this.delegate = requireNonNull(delegate, "delegate cannot be null");
         this.hooks.registerWrapCall( new TrackGraphNodeHook<>( requireNonNull(nodeId, "nodeId cannot be null")));
 
@@ -33,8 +31,7 @@ public class ManagedAsyncNodeActionWithConfig<State extends AgentState> implemen
         return hooks.applyWrapCall(state, config, delegate);
     }
 
-
-    private static class Interruptable<State extends AgentState> extends ManagedAsyncNodeActionWithConfig<State> implements InterruptableAction<State> {
+    private static class Interruptable<State extends AgentState> extends ManagedAsyncNodeAction<State> implements InterruptableAction<State> {
 
         public Interruptable(String nodeId, AsyncNodeActionWithConfig<State> delegate) {
             super(nodeId, delegate);
@@ -52,7 +49,7 @@ public class ManagedAsyncNodeActionWithConfig<State extends AgentState> implemen
             if( delegate instanceof InterruptableAction<?>  ) {
                 return new Interruptable<>( nodeId, delegate );
             }
-            return new ManagedAsyncNodeActionWithConfig<>( nodeId, delegate);
+            return new ManagedAsyncNodeAction<>( nodeId, delegate);
         };
     }
 
