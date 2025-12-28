@@ -17,6 +17,7 @@ import java.util.*;
 
 import static java.lang.String.format;
 import static java.util.Collections.unmodifiableMap;
+import static java.util.Objects.requireNonNull;
 import static java.util.concurrent.CompletableFuture.completedFuture;
 
 /**
@@ -125,13 +126,13 @@ public non-sealed class StateGraph<State extends AgentState> implements GraphDef
     }
 
 
-    public StateGraph<State> addNode(String id, Node.ActionFactory<State> factory) throws GraphStateException {
+    public StateGraph<State> addNode(String id, Node.ActionFactory<State> actionFactory) throws GraphStateException {
         if (Objects.equals(id, END)) {
             throw Errors.invalidNodeIdentifier.exception(END);
         }
 
         // var node = new Node<>(id, ManagedAsyncNodeAction.factory( id, action ) );
-        var node = new Node<>(id, factory );
+        var node = new Node<>(id, requireNonNull(actionFactory, "actionFactory cannot be null") );
 
         if (nodes.elements.contains(node)) {
             throw Errors.duplicateNodeError.exception(id);
