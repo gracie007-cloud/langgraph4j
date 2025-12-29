@@ -17,6 +17,7 @@ import java.util.*;
 
 import static java.lang.String.format;
 import static java.util.Collections.unmodifiableMap;
+import static java.util.Objects.requireNonNull;
 import static java.util.concurrent.CompletableFuture.completedFuture;
 
 /**
@@ -124,6 +125,23 @@ public non-sealed class StateGraph<State extends AgentState> implements GraphDef
         return unmodifiableMap(channels);
     }
 
+
+    public StateGraph<State> addNode(String id, Node.ActionFactory<State> actionFactory) throws GraphStateException {
+        if (Objects.equals(id, END)) {
+            throw Errors.invalidNodeIdentifier.exception(END);
+        }
+
+        // var node = new Node<>(id, ManagedAsyncNodeAction.factory( id, action ) );
+        var node = new Node<>(id, requireNonNull(actionFactory, "actionFactory cannot be null") );
+
+        if (nodes.elements.contains(node)) {
+            throw Errors.duplicateNodeError.exception(id);
+        }
+
+        nodes.elements.add(node);
+        return this;
+    }
+
     /**
      * Adds a node to the graph.
      *
@@ -143,17 +161,8 @@ public non-sealed class StateGraph<State extends AgentState> implements GraphDef
      * @throws GraphStateException if the node identifier is invalid or the node already exists
      */
     public StateGraph<State> addNode(String id, AsyncNodeActionWithConfig<State> action) throws GraphStateException {
-        if (Objects.equals(id, END)) {
-            throw Errors.invalidNodeIdentifier.exception(END);
-        }
-        Node<State> node = new Node<>(id, (config ) -> action );
-
-        if (nodes.elements.contains(node)) {
-            throw Errors.duplicateNodeError.exception(id);
-        }
-
-        nodes.elements.add(node);
-        return this;
+        final Node.ActionFactory<State> factory = ( config ) -> action;
+        return addNode( id, factory);
     }
 
     /**

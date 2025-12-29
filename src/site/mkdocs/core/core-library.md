@@ -451,7 +451,7 @@ public interface InterruptableAction<State extends AgentState> {
     * @return An {@link Optional} containing {@link InterruptionMetadata} if the execution
     *         should be interrupted. Returns an empty {@link Optional} to continue execution.
    */
-   Optional<InterruptionMetadata<State>> interrupt(String nodeId, State state );
+   Optional<InterruptionMetadata<State>> interrupt(String nodeId, State state, RunnableConfig config );
 }
 ```
 
@@ -467,14 +467,18 @@ public interface InterruptableAction<State extends AgentState> {
 
 You **MUST** use a [checkpoiner](#checkpointer) when using breakpoints. This is because your graph needs to be able to resume execution.
 
-In order to resume execution, you can just invoke your graph with `GraphInput.resume()` as the input.
+In order to resume execution, you can just invoke your graph with `GraphInput.resume()` or `GraphInput.resume(Map)` as the input.
 
 ```java
 // Initial run of graph
 graph.stream(inputs, config);
 
-// Let's assume it hit a breakpoint somewhere, you can then resume by passing in None
+// Let's assume it hit a breakpoint somewhere, you can then resume it no passing new state data
 graph.stream(GraphInput.resume(), config);
+
+// Let's assume it hit a breakpoint somewhere, you can then resume it passing new state data
+graph.stream(GraphInput.resume( Map.of( "key", "value")), config);
+
 ```
 
 ### Achieve InterruptionMetadata object after interruption

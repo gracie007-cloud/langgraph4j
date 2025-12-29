@@ -24,7 +24,9 @@ public final class RunnableConfig implements HasMetadata {
      * key that contains boolean value to inform that graph is executing in studio environment
      * Warning: it is a RESERVED METADATA KEY don't use it
      */
-    public static final String STUDIO_METADATA_KEY = "__STUDIO_MDK__";
+    public static final String STUDIO_METADATA_KEY = "LG4j_STUDIO_MDK";
+    public static final String NODE_ID = "LG4j_NODE";
+    public static final String GRAPH_PATH = "LG4j_PATH";
 
     private final String threadId;
     private final String checkPointId;
@@ -99,6 +101,21 @@ public final class RunnableConfig implements HasMetadata {
 
     }
 
+    /**
+     * Updates the metadata of the configuration with the provided new metadata.
+     *
+     * @param newMetadata The map containing the new metadata to be merged.
+     * @return A new {@code RunnableConfig} instance with updated metadata, or the current instance if no changes are needed.
+     */
+    public RunnableConfig updateMetadata( Map<String,Object> newMetadata ) {
+
+        if( newMetadata == null || newMetadata.isEmpty() ) return this;
+
+        return new RunnableConfig.Builder( this)
+                .putMetadata( newMetadata )
+                .build();
+    }
+
     @Override
     public Set<String> metadataKeys() {
         return ofNullable(metadata).map( Map::keySet ).orElseGet(Set::of);
@@ -124,7 +141,19 @@ public final class RunnableConfig implements HasMetadata {
      * @return {@code true} if the {@link #STUDIO_METADATA_KEY} metadata key is present and its value is {@code true}, {@code false} otherwise.
      */
     public boolean isRunningInStudio() {
-        return metadata(STUDIO_METADATA_KEY, new TypeRef<Boolean>() {} ).orElse(false);
+        return (Boolean)metadata(STUDIO_METADATA_KEY).orElse(false);
+    }
+
+    public String nodeId() {
+        return (String)metadata(NODE_ID).orElseThrow();
+    }
+
+    public Optional<String> graphId() {
+        return graphPath().lastElement();
+    }
+
+    public GraphPath graphPath() {
+        return metadata(GRAPH_PATH, new TypeRef<GraphPath>() {}).orElseGet(GraphPath::empty);
     }
 
     /**
@@ -170,7 +199,9 @@ public final class RunnableConfig implements HasMetadata {
             this.checkPointId   = config.checkPointId;
             this.nextNode       = config.nextNode;
             this.streamMode     = config.streamMode;
+
         }
+
         /**
          * Sets the ID of the thread.
          *
