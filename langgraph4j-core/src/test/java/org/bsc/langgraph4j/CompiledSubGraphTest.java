@@ -431,8 +431,10 @@ public class CompiledSubGraphTest {
     @EnumSource( GraphCompileEnum.class     )
     public  void compiledSubGraphTrackingTest( GraphCompileEnum graphCompile ) throws Exception {
 
-        var subGraphId = "subgraph1";
-        var subSubGraphId = "subgraph2" ;
+        final var subGraphNodeId = "subgraph1";
+        final var subGraphId = "subGraph";
+        final var subSubGraphNodeId = "subgraph2" ;
+        final var subSubGraphId = "subSubGraph";
 
         var subGraphBasePath = graphCompile.config.graphId()
                 .map( graphId ->  GraphPath.of( graphId, subGraphId ) )
@@ -453,11 +455,11 @@ public class CompiledSubGraphTest {
 
         var subGraph = new StateGraph<>(MyState.SCHEMA, MyState::new)
                 .addNode("bar1", nodeBuilder().nodeId("bar1").path(subGraphBasePath).build())
-                .addNode(subSubGraphId, subSubGraph)
+                .addNode(subSubGraphNodeId, subSubGraph)
                 .addNode("bar2", nodeBuilder().nodeId("bar2").path(subGraphBasePath).build())
                 .addEdge(StateGraph.START, "bar1")
-                .addEdge("bar1", subSubGraphId)
-                .addEdge(subSubGraphId, "bar2")
+                .addEdge("bar1", subSubGraphNodeId)
+                .addEdge(subSubGraphNodeId, "bar2")
                 .addEdge("bar2", StateGraph.END)
                 .compile( CompileConfig.builder()
                         .graphId("subGraph")
@@ -465,11 +467,11 @@ public class CompiledSubGraphTest {
 
         var stateGraph = new StateGraph<>(MyState.SCHEMA, MyState::new)
                 .addNode("main1", nodeBuilder().nodeId("main1").build())
-                .addNode(subGraphId, subGraph)
+                .addNode(subGraphNodeId, subGraph)
                 .addNode("main2",  nodeBuilder().nodeId("main2").build())
                 .addEdge(StateGraph.START, "main1")
-                .addEdge("main1", subGraphId)
-                .addEdge(subGraphId, "main2")
+                .addEdge("main1", subGraphNodeId)
+                .addEdge(subGraphNodeId, "main2")
                 .addEdge("main2", StateGraph.END)
                 .compile( graphCompile.config );
 
