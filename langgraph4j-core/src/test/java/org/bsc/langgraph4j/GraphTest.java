@@ -4,6 +4,7 @@ import org.bsc.async.AsyncGenerator;
 import org.bsc.langgraph4j.action.AsyncCommandAction;
 import org.bsc.langgraph4j.action.AsyncNodeActionWithConfig;
 import org.bsc.langgraph4j.action.Command;
+import org.bsc.langgraph4j.internal.node.Node;
 import org.bsc.langgraph4j.prebuilt.MessagesState;
 import org.bsc.langgraph4j.state.*;
 import org.bsc.langgraph4j.utils.EdgeMappings;
@@ -22,6 +23,7 @@ import static org.bsc.langgraph4j.StateGraph.START;
 import static org.bsc.langgraph4j.action.AsyncEdgeAction.edge_async;
 import static org.bsc.langgraph4j.action.AsyncNodeActionWithConfig.node_async;
 import static org.bsc.langgraph4j.state.AgentState.MARK_FOR_REMOVAL;
+import static org.bsc.langgraph4j.utils.CollectionsUtils.mergeMap;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -41,6 +43,50 @@ public class GraphTest {
         }
 
     }
+
+    static class NodeActionBuilder {
+        String nodeId;
+        GraphPath basePath;
+
+        public NodeActionBuilder nodeId(String nodeId ) {
+            this.nodeId = nodeId;
+            return this;
+        }
+        public NodeActionBuilder path(GraphPath path ) {
+            this.basePath = path;
+            return this;
+        }
+
+        public Node.ActionFactory<State> build() {
+            assertNotNull( nodeId );
+            return ( CompileConfig compileConfig ) ->
+
+                (state,config) -> {
+
+                    assertEquals(nodeId, config.nodeId());
+
+                    if( basePath != null ) {
+                        log.info("graphPath: {}", config.graphPath());
+                        assertEquals( basePath, config.graphPath() );
+                    }
+
+                    if(  compileConfig.graphId().isPresent() ) {
+                        log.info("graphId: {} config.graphId: {}", compileConfig.graphId().get(), config.graphId().orElse("<NONE>>"));
+                        assertTrue( config.graphId().isPresent() );
+                        assertEquals(compileConfig.graphId().get(), config.graphId().get() );
+                    }
+
+                    return completedFuture( Map.of("messages", nodeId ));
+
+                };
+
+        }
+    }
+
+    private NodeActionBuilder actionBuilder() {
+        return new NodeActionBuilder();
+    }
+
 
     public static <T> List<Map.Entry<String, T>> sortMap(Map<String, T> map) {
         return map.entrySet().stream()
@@ -583,5 +629,38 @@ public class GraphTest {
 
     }
 
+    @Test
+    public void testHook() throws Exception {
 
+        var workflow = new StateGraph<>(MessagesState.SCHEMA, State::new)
+                .registerNodeHook( ( state, config, action ) -> {
+                    log.info("node {} hooked - start", config.nodeId());
+                    return action.apply(state, config)
+                            .whenComplete( ( result, exception ) ->
+                                log.info("node {} hooked - end", config.nodeId()));
+                })
+                .registerNodeHook( "node_2",( state, config, action ) -> {
+                    log.info("specified node {} hooked - start", config.nodeId());
+                    return action.apply(state, config)
+                            .thenApply(result -> mergeMap( result, Map.of("hook", "node_2_hooked")))
+                            .whenComplete( ( result, exception ) ->
+                                    log.info("specified node {} hooked - end", config.nodeId()));
+                })
+                .addEdge(START, "node_1")
+                .addNode("node_1", actionBuilder().nodeId("node_1").build() )
+                .addNode("node_2", actionBuilder().nodeId("node_2").build() )
+                .addEdge("node_1", "node_2")
+                .addEdge("node_2", END)
+                .compile();
+
+        var result = workflow.invoke(   GraphInput.args(Map.of("input", "test1")),
+                                        RunnableConfig.builder().build());
+        assertTrue( result.isPresent() );
+        var state = result.get();
+        assertEquals( 3, state.data().size() );
+        assertEquals( "test1", state.value("input").orElse(null));
+        assertEquals( "node_2_hooked", state.value("hook").orElse(null));
+        assertIterableEquals( List.of("node_1", "node_2"), state.messages());
+
+    }
 }
