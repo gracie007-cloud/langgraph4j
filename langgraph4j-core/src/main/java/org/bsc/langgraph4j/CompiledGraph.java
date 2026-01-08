@@ -744,7 +744,7 @@ public final class CompiledGraph<State extends AgentState> implements GraphDefin
                                           RunnableConfig runnableConfig ) throws ExecutionException, InterruptedException
         {
             //return action.apply( clonedState, runnableConfig)
-            return stateGraph.nodeHooks.applyWrapCall( action, clonedState, runnableConfig )
+            return stateGraph.nodeHooks.applyWrapCall( action, clonedState, runnableConfig, stateGraph.getChannels() )
                     .thenApply(TryFunction.Try(updateState -> {
 
                         Optional<Data<Output>> embed = getEmbedGenerator( action, updateState);
