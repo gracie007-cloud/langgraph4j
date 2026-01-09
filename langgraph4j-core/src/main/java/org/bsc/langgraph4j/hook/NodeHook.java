@@ -7,20 +7,14 @@ import org.bsc.langgraph4j.state.AgentState;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 
-import static java.util.concurrent.CompletableFuture.completedFuture;
-
 public interface NodeHook {
 
     interface BeforeCall<State extends AgentState> {
-        default CompletableFuture<Void> accept(State state, RunnableConfig config ) {
-            return completedFuture(null);
-        }
+        CompletableFuture<Map<String, Object>> accept(State state, RunnableConfig config );
     }
 
     interface AfterCall<State extends AgentState> {
-        default CompletableFuture<Map<String, Object>> accept(State state, RunnableConfig config, Map<String, Object> result ) {
-            return completedFuture(result);
-        }
+        CompletableFuture<Map<String, Object>> accept(State state, RunnableConfig config, Map<String, Object> result ) ;
     }
 
     interface WrapCall<State extends AgentState> {
