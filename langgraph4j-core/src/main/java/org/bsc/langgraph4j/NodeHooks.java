@@ -3,6 +3,7 @@ package org.bsc.langgraph4j;
 import org.bsc.langgraph4j.action.AsyncNodeActionWithConfig;
 import org.bsc.langgraph4j.hook.NodeHook;
 import org.bsc.langgraph4j.state.AgentState;
+import org.bsc.langgraph4j.state.AgentStateFactory;
 import org.bsc.langgraph4j.state.Channel;
 
 import java.util.*;
@@ -11,6 +12,8 @@ import java.util.stream.Stream;
 
 import static java.util.Objects.requireNonNull;
 import static java.util.Optional.ofNullable;
+import static java.util.concurrent.CompletableFuture.completedFuture;
+import static org.bsc.langgraph4j.utils.CollectionsUtils.mergeMap;
 
 class NodeHooks<State extends AgentState> {
 
@@ -25,17 +28,74 @@ class NodeHooks<State extends AgentState> {
         }
     }
 
-    private Map<String,List<NodeHook.WrapCall<State>>> wrapCallMap;
-    private List<NodeHook.WrapCall<State>> wrapCallList;
+    // BEFORE CALL HOOK
+    private Deque<NodeHook.BeforeCall<State>> beforeCallList;
+
+    private Stream<NodeHook.BeforeCall<State>> beforeCallListAsStream( ) {
+        return ofNullable(beforeCallList).stream().flatMap(Collection::stream);
+    }
+
+    public void addBeforeCall(NodeHook.BeforeCall<State> beforeCall ) {
+        requireNonNull( beforeCall, "beforeCall cannot be null");
+
+        if( beforeCallList == null ) { // Lazy Initialization
+            beforeCallList = new ArrayDeque<>();
+        }
+
+        beforeCallList.push(beforeCall);
+    }
+
+
+    public CompletableFuture<Map<String, Object>> applyBeforeCall(State state, RunnableConfig config, AgentStateFactory<State> stateFactory, Map<String, Channel<?>> schema ) {
+        return beforeCallListAsStream()
+                .reduce( completedFuture(state.data()),
+                        (futureResult, call) ->
+                                futureResult.thenCompose( result -> call.accept(stateFactory.apply(result), config)
+                                        .thenApply( partial -> AgentState.updateState( result, partial, schema ) )),
+                        (f1, f2) -> f1.thenCompose(v -> f2) // Combiner for parallel streams
+                );
+    }
+
+    // AFTER CALL HOOK
+    private Deque<NodeHook.AfterCall<State>> afterCallList;
+
+    private Stream<NodeHook.AfterCall<State>> afterCallListAsStream( ) {
+        return ofNullable(afterCallList).stream().flatMap(Collection::stream);
+    }
+
+    public void addAfterCall(NodeHook.AfterCall<State> afterCall ) {
+        requireNonNull( afterCall, "afterCall cannot be null");
+
+        if( afterCallList == null ) { // Lazy Initialization
+            afterCallList = new ArrayDeque<>();
+        }
+
+        afterCallList.push(afterCall);
+    }
+
+    public CompletableFuture<Map<String, Object>> applyAfterCall(State state, RunnableConfig config, Map<String,Object> partialResult ) {
+        return afterCallListAsStream()
+                .reduce( completedFuture(partialResult),
+                        (futureResult, call) ->
+                                futureResult.thenCompose( result -> call.accept( state, config, result)
+                                        .thenApply( partial -> mergeMap(result, partial, ( oldValue, newValue) -> newValue ) )),
+                        (f1, f2) -> f1.thenCompose(v -> f2) // Combiner for parallel streams
+                );
+    }
+
+    // WRAP CALL HOOK
+    private Map<String,Deque<NodeHook.WrapCall<State>>> wrapCallMap;
+    private Deque<NodeHook.WrapCall<State>> wrapCallList;
+
 
     public void addWrapCall(NodeHook.WrapCall<State> wrapCall ) {
         requireNonNull( wrapCall, "wrapCall cannot be null");
 
         if( wrapCallList == null ) { // Lazy Initialization
-            wrapCallList = new LinkedList<>();
+            wrapCallList = new ArrayDeque<>();
         }
 
-        wrapCallList.add(wrapCall);
+        wrapCallList.push(wrapCall);
     }
 
     public void addWrapCall(String nodeId, NodeHook.WrapCall<State> wrapCall ) {
@@ -46,9 +106,8 @@ class NodeHooks<State extends AgentState> {
             wrapCallMap = new HashMap<>();
         }
 
-        final var values = wrapCallMap.computeIfAbsent(nodeId, k -> new LinkedList<>());
-
-        values.add(wrapCall);
+        wrapCallMap.computeIfAbsent(nodeId, k -> new ArrayDeque<>())
+                    .push(wrapCall);
 
     }
 
@@ -70,6 +129,5 @@ class NodeHooks<State extends AgentState> {
                         (v1, v2) -> v1)
                 .apply(state, config);
     }
-
 
 }
