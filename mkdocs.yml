@@ -29,6 +29,7 @@ nav:
     #   - JavaDoc: apidocs/index.html
     - Tutorial:
       - Core Library: core/core-library.md
+      - Hooks: core/hooks.md      
       - Parallel Branch: core/parallel-branch.md
       - Streaming: core/streaming.md
       - Subgraphs: core/subgraph.md
