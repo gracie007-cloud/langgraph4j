@@ -44,11 +44,11 @@ public class NodeHooks<State extends AgentState> {
             super(Type.LIFO);
         }
 
-        public CompletableFuture<Map<String, Object>> apply(State state, RunnableConfig config, AgentStateFactory<State> stateFactory, Map<String, Channel<?>> schema ) {
-            return Stream.concat( callListAsStream(), callMapAsStream(config.nodeId()))
+        public CompletableFuture<Map<String, Object>> apply( String nodeId, State state, RunnableConfig config, AgentStateFactory<State> stateFactory, Map<String, Channel<?>> schema ) {
+            return Stream.concat( callListAsStream(), callMapAsStream(nodeId))
                     .reduce( completedFuture(state.data()),
                             (futureResult, call) ->
-                                    futureResult.thenCompose( result -> call.applyBefore(stateFactory.apply(result), config)
+                                    futureResult.thenCompose( result -> call.applyBefore(nodeId, stateFactory.apply(result), config)
                                             .thenApply( partial -> AgentState.updateState( result, partial, schema ) )),
                             (f1, f2) -> f1.thenCompose(v -> f2) // Combiner for parallel streams
                     );
@@ -64,11 +64,11 @@ public class NodeHooks<State extends AgentState> {
             super(Type.LIFO);
         }
 
-        public CompletableFuture<Map<String, Object>> apply(State state, RunnableConfig config, Map<String,Object> partialResult ) {
-            return Stream.concat( callListAsStream(), callMapAsStream(config.nodeId()))
+        public CompletableFuture<Map<String, Object>> apply(String nodeId, State state, RunnableConfig config, Map<String,Object> partialResult ) {
+            return Stream.concat( callListAsStream(), callMapAsStream(nodeId))
                     .reduce( completedFuture(partialResult),
                             (futureResult, call) ->
-                                    futureResult.thenCompose( result -> call.applyAfter( state, config, result)
+                                    futureResult.thenCompose( result -> call.applyAfter( nodeId, state, config, result)
                                             .thenApply( partial -> mergeMap(result, partial, ( oldValue, newValue) -> newValue ) )),
                             (f1, f2) -> f1.thenCompose(v -> f2) // Combiner for parallel streams
                     );
@@ -81,13 +81,14 @@ public class NodeHooks<State extends AgentState> {
     // WRAP CALL HOOK
 
     private record WrapCallChainLink<State extends AgentState>  (
+            String nodeId,
             NodeHook.WrapCall<State> delegate,
             AsyncNodeActionWithConfig<State> action
     )  implements AsyncNodeActionWithConfig<State> {
 
         @Override
         public CompletableFuture<Map<String, Object>> apply(State state, RunnableConfig config) {
-            return delegate.applyWrap(state, config, action);
+            return delegate.applyWrap(nodeId, state, config, action);
         }
     }
 
@@ -97,10 +98,10 @@ public class NodeHooks<State extends AgentState> {
             super(Type.FIFO);
         }
 
-        public CompletableFuture<Map<String, Object>> apply(State state, RunnableConfig config, AsyncNodeActionWithConfig<State> action ) {
-            return Stream.concat( callListAsStream(), callMapAsStream(config.nodeId()))
+        public CompletableFuture<Map<String, Object>> apply( String nodeId, State state, RunnableConfig config, AsyncNodeActionWithConfig<State> action ) {
+            return Stream.concat( callListAsStream(), callMapAsStream(nodeId))
                     .reduce(action,
-                            (acc, wrapper) -> new WrapCallChainLink<>(wrapper, acc),
+                            (acc, wrapper) -> new WrapCallChainLink<>(nodeId, wrapper, acc),
                             (v1, v2) -> v1)
                     .apply(state, config);
         }
@@ -111,17 +112,18 @@ public class NodeHooks<State extends AgentState> {
     // ALL IN ONE METHODS
 
     public CompletableFuture<Map<String, Object>> applyActionWithHooks( AsyncNodeActionWithConfig<State> action,
+                                                                        String nodeId,
                                                                         State state,
                                                                         RunnableConfig config,
                                                                         AgentStateFactory<State> stateFactory,
                                                                         Map<String, Channel<?>> schema ) {
-        return beforeCalls.apply( state, config, stateFactory, schema )
+        return beforeCalls.apply( nodeId, state, config, stateFactory, schema )
                 .thenApply( processedResult -> {
                     final var newStateData = AgentState.updateState(state, processedResult, schema);
                     return stateFactory.apply(newStateData);
                 })
-                .thenCompose( newState -> wrapCalls.apply(newState, config, action)
-                    .thenCompose( partial -> afterCalls.apply(newState, config, partial) ));
+                .thenCompose( newState -> wrapCalls.apply( nodeId, newState, config, action)
+                    .thenCompose( partial -> afterCalls.apply(nodeId, newState, config, partial) ));
 
     }
 
