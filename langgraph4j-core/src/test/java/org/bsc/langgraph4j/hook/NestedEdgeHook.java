@@ -24,37 +24,37 @@ public record NestedEdgeHook<State extends AgentState>(String level, Map<String,
     }
 
     @Override
-    public CompletableFuture<Command> applyAfter(State state, RunnableConfig config, Command lastResult) {
-        log.info("edge after call start: hook on '{}' level '{}'", config.nodeId(), level);
+    public CompletableFuture<Command> applyAfter(String sourceId, State state, RunnableConfig config, Command lastResult) {
+        log.info("edge after call start: hook on '{}' level '{}'", sourceId, level);
         return completedFuture( (schema!=null) ?
                 new Command( lastResult.gotoNodeSafe().orElse(null),
                         AgentState.updateState( lastResult.update(), Map.of(AFTER_CALL_ATTRIBUTE, 1), schema )) :
                 lastResult)
                 .whenComplete( ( result, exception ) ->
-                        log.info("edge after call end: hook on '{}' level '{}'", config.nodeId(), level));
+                        log.info("edge after call end: hook on '{}' level '{}'", sourceId, level));
 
     }
 
     @Override
-    public CompletableFuture<Command> applyBefore(State state, RunnableConfig config) {
-        log.info("edge before call start: hook on '{}' level '{}'", config.nodeId(), level);
-        return completedFuture( new Command( Map.of(HOOKS_ATTRIBUTE, Map.of( config.nodeId(), List.of(level)))))
+    public CompletableFuture<Command> applyBefore(String sourceId, State state, RunnableConfig config) {
+        log.info("edge before call start: hook on '{}' level '{}'", sourceId, level);
+        return completedFuture( new Command( Map.of(HOOKS_ATTRIBUTE, Map.of( sourceId, List.of(level)))))
                 .whenComplete( ( result, exception ) ->
-                        log.info("edge before call end: hook on '{}' level '{}'", config.nodeId(), level));
+                        log.info("edge before call end: hook on '{}' level '{}'", sourceId, level));
 
     }
 
     @Override
-    public CompletableFuture<Command> applyWrap(State state, RunnableConfig config, AsyncCommandAction<State> action) {
-        log.info("edge wrap call start: hook on '{}' level '{}'", config.nodeId(), level);
+    public CompletableFuture<Command> applyWrap( String sourceId, State state, RunnableConfig config, AsyncCommandAction<State> action) {
+        log.info("edge wrap call start: hook on '{}' level '{}'", sourceId, level);
         return action.apply(state, config)
                 .thenApply(result -> (schema!=null) ?
                         new Command( result.gotoNodeSafe().orElse(null),
                                 AgentState.updateState( result.update(),
-                                                        Map.of(HOOKS_ATTRIBUTE, Map.of( config.nodeId(), List.of(level))), schema )) :
+                                                        Map.of(HOOKS_ATTRIBUTE, Map.of( sourceId, List.of(level))), schema )) :
                         result )
                 .whenComplete( ( result, exception ) -> {
-                    log.info("edge wrap call end: hook on '{}' level '{}'", config.nodeId(), level);
+                    log.info("edge wrap call end: hook on '{}' level '{}'", sourceId, level);
                 });
 
     }
