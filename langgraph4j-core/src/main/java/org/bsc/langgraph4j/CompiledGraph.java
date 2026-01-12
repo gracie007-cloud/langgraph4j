@@ -293,6 +293,24 @@ public final class CompiledGraph<State extends AgentState> implements GraphDefin
         this.maxIterations = maxIterations;
     }
 
+    /**
+     * UPDATE RUNNABLE CONFIG METADATA
+     */
+    private RunnableConfig updateRunnableConfigMetadata( RunnableConfig config, String currentNodeId ) {
+        final var newMetadata = new HashMap<String,Object>(2);
+        newMetadata.put(RunnableConfig.NODE_ID, currentNodeId);
+        compileConfig.graphId()
+                .ifPresent( graphId -> {
+                    newMetadata.put(RunnableConfig.GRAPH_ID, graphId);
+                    if( config.graphPath().isEmpty() ) { // to avoid add graphId in subgraph cases
+                        newMetadata.put(RunnableConfig.GRAPH_PATH, config.graphPath().append(graphId) );
+                    }
+                });
+
+        return config.updateMetadata( newMetadata );
+
+    }
+
     private Command nextNodeId(EdgeValue<State> route , Map<String,Object> state, String nodeId, RunnableConfig config ) throws Exception {
 
         if( route == null ) {
@@ -302,19 +320,29 @@ public final class CompiledGraph<State extends AgentState> implements GraphDefin
             return new Command(route.id(), state);
         }
         if( route.value() != null ) {
-            State derefState = stateGraph.getStateFactory().apply(state);
+
+            final var newConfig = updateRunnableConfigMetadata( config, nodeId );
+
+            final State derefState = stateGraph.getStateFactory().apply(state);
 
             // var command = route.value().action().apply(derefState,config).get();
-            var command = stateGraph.edgeHooks.applyActionWithHooks( route.value().action(), nodeId, derefState, config, stateGraph.getStateFactory(), stateGraph.getChannels() ).get();
+            final var command = stateGraph.edgeHooks.applyActionWithHooks(
+                    route.value().action(),
+                    nodeId,
+                    derefState,
+                    newConfig,
+                    stateGraph.getStateFactory(),
+                    stateGraph.getChannels() )
+                    .get();
 
-            var newRoute = command.gotoNode();
+            final var newRoute = command.gotoNode();
 
-            String result = route.value().mappings().get(newRoute);
+            final String result = route.value().mappings().get(newRoute);
             if( result == null ) {
                 throw RunnableErrors.missingNodeInEdgeMapping.exception(nodeId, newRoute);
             }
 
-            var currentState = AgentState.updateState(state, command.update(), stateGraph.getChannels());
+            final var currentState = AgentState.updateState(state, command.update(), stateGraph.getChannels());
 
             return new Command(result, currentState);
         }
@@ -865,20 +893,7 @@ public final class CompiledGraph<State extends AgentState> implements GraphDefin
 
                 context.setCurrentNodeId( context.nextNodeId() );
 
-                //
-                // UPDATE RUNNABLE CONFIG METADATA
-                //
-                final var newMetadata = new HashMap<String,Object>(2);
-                newMetadata.put(RunnableConfig.NODE_ID, context.currentNodeId());
-                compileConfig.graphId()
-                        .ifPresent( graphId -> {
-                            newMetadata.put(RunnableConfig.GRAPH_ID, graphId);
-                            if( this.config.graphPath().isEmpty() ) { // to avoid add graphId in subgraph cases
-                                newMetadata.put(RunnableConfig.GRAPH_PATH, this.config.graphPath().append(graphId) );
-                            }
-                        });
-
-                final var newConfig = this.config.updateMetadata( newMetadata );
+                final var newConfig = updateRunnableConfigMetadata( config, context.currentNodeId() );
 
                 //
                 // EVALUATE ACTION
