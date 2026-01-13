@@ -1,7 +1,6 @@
 package org.bsc.langgraph4j;
 
 import org.bsc.async.AsyncGenerator;
-import org.bsc.langgraph4j.action.AsyncNodeAction;
 import org.bsc.langgraph4j.action.AsyncNodeActionWithConfig;
 import org.bsc.langgraph4j.checkpoint.MemorySaver;
 import org.bsc.langgraph4j.hook.NodeHook;
@@ -14,10 +13,12 @@ import org.bsc.langgraph4j.utils.EdgeMappings;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 import static java.util.concurrent.CompletableFuture.completedFuture;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * refer to issue <a href="https://github.com/langgraph4j/langgraph4j/issues/309">#309<a></a>
@@ -31,6 +32,9 @@ public class Issue309Test {
             super(initData);
         }
 
+        List<String> values() {
+            return this.<List<String>>value("VALUE" ).orElseThrow();
+        }
         String nextNode() {
             return this.<String>value("NEXT_NODE" ).orElse(StateGraph.END);
         }
@@ -49,7 +53,9 @@ public class Issue309Test {
                     ;
         }
     }
-    private void extracted(AsyncGenerator.Cancellable<NodeOutput<State>> iterator) {
+
+    @SuppressWarnings("unchecked")
+    private Map<String,Object> extracted(AsyncGenerator.Cancellable<NodeOutput<State>> iterator) {
         for( var next : iterator ) {
 
             if( next instanceof StreamingOutput<?> streamingOutput){
@@ -61,6 +67,9 @@ public class Issue309Test {
                 System.out.printf( "%s Executed%nResult State : %s%n", nodeName,state );
             }
         }
+        return AsyncGenerator.resultValue(iterator)
+                .map( result -> (Map<String,Object>)result )
+                .orElseThrow();
     }
 
     private StateGraph<State> buildStateGraph() throws GraphStateException {
@@ -94,7 +103,6 @@ public class Issue309Test {
     private CompiledGraph<State> compiledGraph( boolean displayGraph ) throws GraphStateException {
         var saver = new MemorySaver();
         var compileConfig = CompileConfig.builder()
-                // .interruptBefore("FEEDBACK_NODE")
                 .checkpointSaver(saver)
                 .releaseThread(false)
                 .build();
@@ -119,15 +127,32 @@ public class Issue309Test {
                 .threadId("1")
                 .build();
 
-        var stream = compiledGraph.stream(Map.of(), runnableConfig);
-        extracted(stream);
         System.out.println("First Time execute Done , Execute order NodeA - NodeB - END");
+
+        var stream = compiledGraph.stream(Map.of(), runnableConfig);
+
+        var result = extracted(stream);
+        assertFalse( result.isEmpty() );
+        assertTrue( result.containsKey("VALUE") );
+        assertInstanceOf( List.class, result.get("VALUE"));
+        @SuppressWarnings("unchecked")
+        var values = (List<String>)result.get("VALUE");
+        assertIterableEquals( List.of("1", "2"), values );
 
         // Resume from NODE_B
         System.out.println("Resume the same session , Set Resume from NodeB , and Set NEXT_NODE , want to route to FEEDBACK_NODE");
+
         var updatedConfig = compiledGraph.updateState(runnableConfig, Map.of("NEXT_NODE","FEEDBACK_NODE"), "NODE_B");
+
         var resumeStream = compiledGraph.stream(GraphInput.resume(), updatedConfig);
-        extracted(resumeStream);
+        result = extracted(resumeStream);
+        assertFalse( result.isEmpty() );
+        assertTrue( result.containsKey("VALUE") );
+        assertInstanceOf( List.class, result.get("VALUE"));
+        @SuppressWarnings("unchecked")
+        var resumeValues = (List<String>)result.get("VALUE");
+        assertIterableEquals( List.of("1", "2", "3"), resumeValues );
+
         System.out.println("Resume execute Done , Resume from Node B  Execute order NodeA - NodeB - END");
 
 
