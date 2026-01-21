@@ -31,10 +31,17 @@ public interface AiMessageHandler {
             ObjectNode node = mapper.readTree(jsonParser);
 
             var text = node.findValue( "text" ).asText();
+            var thinking =  node.findValue("thinking");
+
+            AiMessage.Builder builder = AiMessage.builder().text(text);
+            if (thinking != null && !thinking.isNull()) {
+                builder.thinking(thinking.asText());
+            }
+
             var requestsNode = node.findValue("toolExecutionRequests");
 
             if( requestsNode.isNull() || requestsNode.isEmpty() ) {
-                return AiMessage.from( text );
+                return builder.build();
             }
 
             var requests = new LinkedList<ToolExecutionRequest>();
@@ -46,8 +53,7 @@ public interface AiMessageHandler {
                 requests.add(request);
             }
 
-            return AiMessage.builder()
-                    .text( text )
+            return builder
                     .toolExecutionRequests( requests)
                     .build();
         }
@@ -66,6 +72,7 @@ public interface AiMessageHandler {
             gen.writeStringField("@type", msg.type().name());
             gen.writeStringField("text", msg.text());
             gen.writeObjectField("toolExecutionRequests", msg.toolExecutionRequests());
+            gen.writeStringField("thinking", msg.thinking());
             gen.writeEndObject();
         }
     }
