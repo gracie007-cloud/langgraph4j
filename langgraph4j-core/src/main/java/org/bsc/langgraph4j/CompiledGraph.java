@@ -1,11 +1,14 @@
 package org.bsc.langgraph4j;
 
+import java.util.Map.Entry;
 import org.bsc.async.AsyncGenerator;
 import org.bsc.langgraph4j.action.*;
 import org.bsc.langgraph4j.checkpoint.BaseCheckpointSaver;
 import org.bsc.langgraph4j.checkpoint.Checkpoint;
 import org.bsc.langgraph4j.internal.edge.Edge;
+import org.bsc.langgraph4j.internal.edge.EdgeCondition;
 import org.bsc.langgraph4j.internal.edge.EdgeValue;
+import org.bsc.langgraph4j.internal.node.Node;
 import org.bsc.langgraph4j.internal.node.ParallelNode;
 import org.bsc.langgraph4j.action.SubCompiledGraphNodeAction;
 import org.bsc.langgraph4j.state.AgentState;
@@ -583,25 +586,17 @@ public final class CompiledGraph<State extends AgentState> implements GraphDefin
     class AsyncNodeGenerator<Output extends NodeOutput<State>> extends AsyncGenerator.BaseCancellable<Output> {
 
         static class Context {
-            record ReturnFromEmbed( Object value ) {
-                <T> Optional<T> value( TypeRef<T> ref ) {
-                    return ofNullable(value)
-                            .flatMap(ref::cast);
-                }
-
-            }
-
             private Map<String,Object> currentState;
             private String currentNodeId;
             private String nextNodeId;
             private String resumeFrom;
-            private ReturnFromEmbed returnFromEmbed;
+            private GraphResult returnFromEmbed;
 
             Context( Map<String,Object> initState ) {
                 currentNodeId = START;
                 nextNodeId = null;
                 resumeFrom = null;
-                returnFromEmbed = null;
+                returnFromEmbed = GraphResult.empty();
                 currentState = initState;
             }
 
@@ -610,14 +605,14 @@ public final class CompiledGraph<State extends AgentState> implements GraphDefin
                 nextNodeId = cp.getNextNodeId();
                 resumeFrom = cp.getNodeId();
                 currentState = cp.getState();
-                returnFromEmbed = null;
+                returnFromEmbed = GraphResult.empty();
             }
 
             void reset() {
                 currentNodeId = null;
                 nextNodeId = null;
                 resumeFrom = null;
-                returnFromEmbed = null;
+                returnFromEmbed = GraphResult.empty();
             }
 
             Map<String,Object> currentState() {
@@ -650,14 +645,14 @@ public final class CompiledGraph<State extends AgentState> implements GraphDefin
                 return result;
             }
 
-            Optional<ReturnFromEmbed> getReturnFromEmbedAndReset() {
-                var result = ofNullable(returnFromEmbed);
-                returnFromEmbed = null;
+            GraphResult getReturnFromEmbedAndReset() {
+                var result = returnFromEmbed;
+                returnFromEmbed = GraphResult.empty();
                 return result;
             }
 
-            void setReturnFromEmbedWithValue( Object value ) {
-                returnFromEmbed = new ReturnFromEmbed(value);
+            void setReturnFromEmbedWithValue( GraphResult value ) {
+                returnFromEmbed = requireNonNull(value, "value cannot be null");
             }
 
         }
@@ -740,7 +735,7 @@ public final class CompiledGraph<State extends AgentState> implements GraphDefin
                                 final var result = GraphResult.from(data);
 
                                 if( result.isInterruptionMetadata()  ) {
-                                    context.setReturnFromEmbedWithValue( data );
+                                    context.setReturnFromEmbedWithValue( result );
                                     return;
                                 }
                                 if ( result.isStateData() ) {
@@ -767,7 +762,7 @@ public final class CompiledGraph<State extends AgentState> implements GraphDefin
                             var nextNodeCommand = nextNodeId(context.currentNodeId(), context.currentState(), config) ;
                             context.setNextNodeId(nextNodeCommand.gotoNode());
                             context.setCurrentState( nextNodeCommand.update() );
-                            context.setReturnFromEmbedWithValue(null);
+                            context.setReturnFromEmbedWithValue( GraphResult.empty() );
                         });
                     })
                     ;
@@ -843,12 +838,10 @@ public final class CompiledGraph<State extends AgentState> implements GraphDefin
                 final var returnFromEmbed = context.getReturnFromEmbedAndReset();
 
                 // IS IT A RESUME FROM EMBED ?
-                if( returnFromEmbed.isPresent() ) {
+                if( !returnFromEmbed.isEmpty() ) {
 
-                    var interruption = returnFromEmbed.get().value(new TypeRef<InterruptionMetadata<State>>(){} );
-
-                    if( interruption.isPresent() ) {
-                        return Data.done( interruption.get() );
+                    if( returnFromEmbed.isInterruptionMetadata() ) {
+                        return Data.done( returnFromEmbed.asInterruptionMetadata() );
                     }
 
                     return Data.of( nodeOutput() );
@@ -984,11 +977,38 @@ public final class CompiledGraph<State extends AgentState> implements GraphDefin
 
                 var sgEdgeStartTarget = sgEdgeStart.target();
 
-                if( sgEdgeStartTarget.id() == null ) {
+                if( sgEdgeStartTarget.id() == null && sgEdgeStartTarget.value() == null ) {
                     throw new GraphStateException( format("the target for node '%s' is null!", subgraphNode.id())  );
                 }
 
-                var sgEdgeStartRealTargetId = subgraphNode.formatId( sgEdgeStartTarget.id()  );
+                String sgEdgeStartRealTargetId;
+                if ( sgEdgeStartTarget.id() != null ) {
+                    sgEdgeStartRealTargetId = subgraphNode.formatId(sgEdgeStartTarget.id());
+                } else {
+                    // When subgraph start edge is a conditional edge, use an empty node to bridge parent and subgraph
+                    sgEdgeStartRealTargetId = subgraphNode.formatId(START);
+
+                    var mappings = sgEdgeStartTarget.value().mappings();
+                    var updatedMappings = mappings.entrySet().stream()
+                        .collect(Collectors.toMap(
+                            Entry::getKey,
+                            entry -> subgraphNode.formatId(entry.getValue())));
+
+                    var sgStartEmptyNode = new Node<State>(
+                        sgEdgeStartRealTargetId,
+                        (c) -> AsyncNodeActionWithConfig.noop());
+
+                    var updatedEdgeCondition = new EdgeCondition<>(
+                        sgEdgeStartTarget.value().action(),
+                        updatedMappings);
+
+                    var sgStartEmptyNodeEdge = new Edge<>(
+                        sgEdgeStartRealTargetId,
+                        new EdgeValue<>(updatedEdgeCondition));
+
+                    nodes.elements.add(sgStartEmptyNode);
+                    edges.elements.add(sgStartEmptyNodeEdge);
+                }
 
                 // Process Interruption (Before) Subgraph(s)
                 interruptsBefore = interruptsBefore.stream().map( interrupt ->
@@ -1000,7 +1020,7 @@ public final class CompiledGraph<State extends AgentState> implements GraphDefin
                 var edgesWithSubgraphTargetId =  edges.edgesByTargetId( subgraphNode.id() );
 
                 if( edgesWithSubgraphTargetId.isEmpty() ) {
-                    throw new GraphStateException( format("the node '%s' is not present as target in graph!", subgraphNode.id())  );
+                    throw new GraphStateException( "the node '%s' is not present as target in graph!".formatted( subgraphNode.id() ) );
                 }
 
                 for( var edgeWithSubgraphTargetId : edgesWithSubgraphTargetId  ) {
@@ -1008,7 +1028,7 @@ public final class CompiledGraph<State extends AgentState> implements GraphDefin
                     var newEdge = edgeWithSubgraphTargetId.withSourceAndTargetIdsUpdated( subgraphNode,
                             Function.identity(),
                             id -> new EdgeValue<>( (Objects.equals( id, subgraphNode.id() ) ?
-                                    subgraphNode.formatId( sgEdgeStartTarget.id()  ) : id)));
+                                    sgEdgeStartRealTargetId : id)));
                     edges.elements.remove(edgeWithSubgraphTargetId);
                     edges.elements.add( newEdge );
 
@@ -1035,12 +1055,34 @@ public final class CompiledGraph<State extends AgentState> implements GraphDefin
 
                 }
 
+                var sgEdgeEndTarget = edgeWithSubgraphSourceId.target();
+                if( sgEdgeEndTarget.id() == null && sgEdgeEndTarget.value() == null ) {
+                    throw new GraphStateException( format("the target for node '%s' is null!", subgraphNode.id())  );
+                }
+
+                String sgEdgeEndRealTargetId;
+                if ( sgEdgeEndTarget.id() != null ) {
+                    sgEdgeEndRealTargetId = sgEdgeEndTarget.id();
+                } else {
+                    // When subgraph end edge is a conditional edge, use an empty node to bridge parent and subgraph
+                    sgEdgeEndRealTargetId = subgraphNode.formatId(END);
+
+                    var sgEndEmptyNode = new Node<State>(
+                        sgEdgeEndRealTargetId,
+                        (c) -> AsyncNodeActionWithConfig.noop());
+
+                    var sgEndEmptyNodeEdge = new Edge<>(sgEdgeEndRealTargetId, edgeWithSubgraphSourceId.target());
+
+                    nodes.elements.add(sgEndEmptyNode);
+                    edges.elements.add(sgEndEmptyNodeEdge);
+                }
+
+
                 sgEdgesEnd.stream()
                         .map( e -> e.withSourceAndTargetIdsUpdated( subgraphNode,
                                 subgraphNode::formatId,
-                                id  -> (Objects.equals(id,END) ?
-                                        edgeWithSubgraphSourceId.target() :
-                                        new EdgeValue<>(subgraphNode.formatId(id)) ) )
+                                id  -> new EdgeValue<>(Objects.equals(id,END) ?
+                                        sgEdgeEndRealTargetId : subgraphNode.formatId(id)))
                         )
                         .forEach( edges.elements::add);
                 edges.elements.remove(edgeWithSubgraphSourceId);
