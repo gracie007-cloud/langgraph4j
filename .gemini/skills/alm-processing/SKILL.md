@@ -16,11 +16,15 @@ script/start-release.sh <version>
 ```
 script/set-version.sh <version>
 ```
-3. ask to the user when ready to close the release and when it confirm, close the release with command:
+3. commit the relase update with commands
+```
+git add . ; git commit -m'build: bump to next version <version>'
+```
+4. ask to the user when ready to close the release and when it confirm, close the release with command:
 ```
 script/finish-release.sh <version>
 ```
-4. If all goes well generate the CHANGELOG with command:
+5. If all goes well generate the CHANGELOG with command:
 ```
 script/hotfix-changelog.sh
 ```
