@@ -1,101 +1,102 @@
 # LangGraph4j - Graph Execution Cancellation
 
-LangGraph4j provides a powerful mechanism to cancel the execution of a graph, which is particularly useful for long-running processes. This feature is built upon the cancellation capabilities of the `java-async-generator` library.
+LangGraph4j provides a powerful mechanism to cancel the execution of a graph, which is particularly useful for long-running processes or when an execution path is no longer needed. 
 
-## Cancelling a Graph Stream
+The cancellation feature in LangGraph4j relies on the **AsyncGenerator** cancellation implementation provided by the `java-async-generator` library. For detailed information on the underlying mechanism, see [AsyncGenerator Cancellation](https://github.com/bsorrentino/java-async-generator/blob/main/CANCELLATION.md).
 
-When you execute a graph using the `stream` method, you get an `AsyncGenerator` instance. This generator can be cancelled, allowing you to stop the graph's execution gracefully or immediately.
+## How it Works
 
-To cancel a stream, you need to call the `cancel(boolean mayInterruptIfRunning)` method on the generator.
+When you execute a graph using the `stream` method, it returns an `AsyncGenerator.Cancellable` instance. This object allows you to trigger cancellation and check the current cancellation status.
 
-In the example below we test cancellation considering to make a request from a different thread from the main one using the following method
+### The `cancel` Method
 
-### Consuming the Stream with `forEachAsync`
+The core of the cancellation feature is the `cancel(boolean mayInterruptIfRunning)` method:
 
-When you consume the stream using `forEachAsync`, the graph execution runs in a separate thread.
+*   **`mayInterruptIfRunning = true`**: Triggers an immediate cancellation. It attempts to interrupt the thread currently executing a node. If you are consuming the stream with `forEachAsync`, this will result in the `CompletableFuture` completing exceptionally with an `InterruptedException`.
+*   **`mayInterruptIfRunning = false`**: Triggers a "graceful" cancellation. The system will wait for the currently executing node to complete its task before stopping the graph execution.
 
-- **`cancel(true)` (Immediate Cancellation):** This will interrupt the execution thread, causing the `CompletableFuture` returned by `forEachAsync` to complete exceptionally with an `InterruptedException`.
+## Usage Examples
 
-- **`cancel(false)` (Graceful Cancellation):** This will let the currently executing node finish, and then stop the execution before starting the next node.
+The following examples are inspired by the unit tests in `CancellationTest.java`.
 
-Here is an example from `CancellationTest.java` that demonstrates immediate cancellation:
+### Immediate Cancellation using `forEachAsync`
+
+When using `forEachAsync`, the graph runs in its own execution context. Requests to cancel are typically made from a different thread.
 
 ```java
 var generator = workflow.stream(GraphInput.noArgs(), RunnableConfig.builder().build());
 
-// Request cancellation after 500 milliseconds from a new thread different from main one
-CompletableFuture.runAsync( () -> {
+// Request cancellation from a different thread
+CompletableFuture.runAsync(() -> {
     try {
-        Thread.sleep(500);
-        var result = generator.cancel(mayInterruptIfRunning);
-        log.info("cancellation executed with result: {}", result);
+        Thread.sleep(50); // Small delay to let execution start
+        log.info("Requesting immediate cancellation...");
+        boolean result = generator.cancel(true); // mayInterruptIfRunning = true
+        log.info("Cancellation request result: {}", result);
     } catch (InterruptedException e) {
         throw new RuntimeException(e);
     }
 });
 
 var futureResult = generator.forEachAsync(output -> {
-    log.info("iteration is on: {}", output);
+    log.info("Processing output: {}", output);
 }).exceptionally(ex -> {
-    assertTrue(generator.isCancelled());
-    return "CANCELLED";
+    // Check if the cause of exception is an InterruptedException
+    if (generator.isCancelled()) {
+        log.info("Graph execution was cancelled!");
+        return "CANCELLED";
+    }
+    throw new RuntimeException(ex);
 });
 
-var genericResult = futureResult.get(5, TimeUnit.SECONDS);
-
-assertTrue(generator.isCancelled());
-assertEquals("CANCELLED", genericResult);
+String result = futureResult.get(5, TimeUnit.SECONDS);
+assertEquals("CANCELLED", result);
 ```
 
-### Consuming the Stream with an Iterator
+### Graceful Cancellation using Iterator
 
-When you use a `for-each` loop to iterate over the stream, the execution runs on the current thread.
-
-- **`cancel(true)` or `cancel(false)`:** Both will cause the `hasNext()` method of the iterator to return `false`, effectively stopping the loop.
-
-Here is an example from `CancellationTest.java`:
+If you are iterating over the generator directly (which happens in the calling thread for synchronous iteration), the loop will terminate once the current step finishes after a cancellation request.
 
 ```java
 var generator = workflow.stream(GraphInput.noArgs(), RunnableConfig.builder().build());
 
-// Request cancellation after 500 milliseconds from a new thread different from main one
-CompletableFuture.runAsync( () -> {
+// Request cancellation
+CompletableFuture.runAsync(() -> {
     try {
-        Thread.sleep(500);
-        var result = generator.cancel(mayInterruptIfRunning);
-        log.info("cancellation executed with result: {}", result);
+        Thread.sleep(100);
+        generator.cancel(false); // mayInterruptIfRunning = false
     } catch (InterruptedException e) {
         throw new RuntimeException(e);
     }
 });
 
-
-NodeOutput<?> currentOutput = null;
-
+NodeOutput<?> lastOutput = null;
 for (var output : generator) {
-    log.info("iteration is on: {}", output);
-    currentOutput = output;
+    log.info("Received output from node: {}", output.node());
+    lastOutput = output;
 }
 
-assertNotNull(currentOutput);
-assertNotEquals(END, currentOutput.node());
+// After the loop terminates
 assertTrue(generator.isCancelled());
+assertTrue(GraphResult.from(generator).isEmpty());
 ```
 
-## Checking for Cancellation
+## Advanced Scenarios
 
-You can check if a stream has been cancelled by calling the `isCancelled()` method on the generator.
+### Parallel Node Cancellation
 
-```java
-if (generator.isCancelled()) {
-    // Handle cancellation
-}
-```
+LangGraph4j supports parallel node execution. When a graph is cancelled, all currently running parallel tasks are notified. If `mayInterruptIfRunning` is set to `true`, the `shutdownNow()` method is typically called on the associated executor to stop running tasks immediately.
 
-## Cancellation and Subgraphs
+### Subgraph Propagation
 
-Cancellation also works with nested graphs (subgraphs). If you cancel the execution of a parent graph, the cancellation is propagated to any currently executing subgraph.
+Cancellation is recursive. If a parent graph is cancelled while a subgraph is executing, the cancellation is automatically propagated down to the subgraph's generator.
 
-## Further Reading
+## Summary of Key Methods
 
-The cancellation mechanism is provided by the `java-async-generator` library. For a more in-depth explanation of the underlying cancellation mechanism, please refer to the [CANCELLATION.md](https://github.com/bsorrentino/java-async-generator/blob/main/CANCELLATION.md) document in the `java-async-generator` repository.
+| Method | Description |
+| :--- | :--- |
+| `cancel(boolean mayInterrupt)` | Triggers cancellation. Returns `true` if the request was successful. |
+| `isCancelled()` | Returns `true` if a cancellation request has been made. |
+| `GraphResult.from(generator)` | Utility to check if a result was reached before cancellation. |
+
+For developers interested in the low-level implementation, refer to the [java-async-generator](https://github.com/bsorrentino/java-async-generator) documentation.
