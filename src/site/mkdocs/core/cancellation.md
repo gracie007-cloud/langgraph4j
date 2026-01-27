@@ -17,7 +17,7 @@ The core of the cancellation feature is the `cancel(boolean mayInterruptIfRunnin
 
 ## Usage Examples
 
-The following examples are inspired by the unit tests in `CancellationTest.java`.
+The following examples demonstrate how to use the cancellation feature in different scenarios.
 
 ### Immediate Cancellation using `forEachAsync`
 
@@ -55,7 +55,7 @@ assertEquals("CANCELLED", result);
 
 ### Graceful Cancellation using Iterator
 
-If you are iterating over the generator directly (which happens in the calling thread for synchronous iteration), the loop will terminate once the current step finishes after a cancellation request.
+If you are iterating over the generator directly, the loop will terminate once the current step finishes after a cancellation request.
 
 ```java
 var generator = workflow.stream(GraphInput.noArgs(), RunnableConfig.builder().build());
@@ -91,7 +91,7 @@ LangGraph4j supports parallel node execution. When a graph is cancelled, all cur
 
 Cancellation is recursive. If a parent graph is cancelled while a subgraph is executing, the cancellation is automatically propagated down to the subgraph's generator.
 
-## Summary of Key Methods
+## Key API Summary
 
 | Method | Description |
 | :--- | :--- |
@@ -100,3 +100,4 @@ Cancellation is recursive. If a parent graph is cancelled while a subgraph is ex
 | `GraphResult.from(generator)` | Utility to check if a result was reached before cancellation. |
 
 For developers interested in the low-level implementation, refer to the [java-async-generator](https://github.com/bsorrentino/java-async-generator) documentation.
+

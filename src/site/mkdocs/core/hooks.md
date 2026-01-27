@@ -1,16 +1,16 @@
-
 # Graph Hooks
 
-Hooks in LangGraph4j provide a powerful mechanism to intercept the execution of graph nodes and edges. They allow you to run custom code **before**, **after**, or **around** (wrap) the core logic of a node or a conditional edge.
+Hooks in LangGraph4j provide a powerful mechanism to intercept the execution of graph nodes and edges. They allow you to run custom code **before**, **after**, or **around (wrap)** the core logic of a node or a conditional edge.
 
 ## Hook Interfaces
 
 ### Node Hooks
+
 The `org.bsc.langgraph4j.hook.NodeHook` interface defines hooks related to the graph's nodes. There are three types:
 
-*   **`BeforeCall`**: Executed before the node action. 
-*   **`AfterCall`**: Executed after the node action.
-*   **`WrapCall`**: Wraps the node action, allowing for custom logic before and after execution.
+* **`BeforeCall`**: Executed before the node action.
+* **`AfterCall`**: Executed after the node action.
+* **`WrapCall`**: Wraps the node action, allowing for custom logic before and after execution.
 
 ```java
 public interface NodeHook {
@@ -32,6 +32,7 @@ public interface NodeHook {
 ```
 
 ### Edge Hooks
+
 The `org.bsc.langgraph4j.hook.EdgeHook` interface defines hooks related to the graph's conditional edges. Note that only conditional edges support hooks in LangGraph4j.
 
 ```java
@@ -57,37 +58,42 @@ public interface EdgeHook {
 
 Hooks are registered using the `StateGraph` class. You can register them in two scopes:
 
-1.  **Global Hooks**: Affect all nodes or all conditional edges in the graph.
-2.  **Specific Hooks**: Affect only a specific node or conditional edge identified by its ID.
+1. **Global Hooks**: Affect all nodes or all conditional edges in the graph.
+2. **Specific Hooks**: Affect only a specific node or conditional edge identified by its ID.
 
-### Registration Methods
+### Registration Examples
 
 ```java
-// Global Node Hooks
-stateGraph.addBeforeCallNodeHook(BeforeNodeHook);
-stateGraph.addAfterCallNodeHook(AfterNodeHook);
-stateGraph.addWrapCallNodeHook(WrapNodeHook);
+// Register a global node hook
+stateGraph.addBeforeCallNodeHook( (nodeId, state, config) -> {
+    System.out.println("Before node: " + nodeId);
+    return CompletableFuture.completedFuture(Map.of());
+});
 
-// Specific Node Hooks
-stateGraph.addBeforeCallNodeHook("node_id", BeforeNodeHook);
+// Register a node hook for a specific node
+stateGraph.addAfterCallNodeHook("agent_1", (nodeId, state, config, lastResult) -> {
+    System.out.println("After agent_1 completed");
+    return CompletableFuture.completedFuture(lastResult);
+});
 
-// Global Edge Hooks
-stateGraph.addAfterCallEdgeHook(AfterEdgeHook);
-
-// Specific Edge Hooks
-stateGraph.addAfterCallEdgeHook("node_id", AfterEdgeHook);
+// Register a global edge hook
+stateGraph.addWrapCallEdgeHook( (sourceId, state, config, action) -> {
+    System.out.println("Wrapping edge from: " + sourceId);
+    return action.apply(state, config);
+});
 ```
 
 ## Execution Order and Strategy
 
 When multiple hooks are registered (global and/or specific), their execution order is determined by the following strategies:
 
-*   **Before Call Hooks**: Executed using a **LIFO** (Last-In, First-Out) strategy. The most recently added hook runs first.
-*   **After Call Hooks**: Executed using a **LIFO** (Last-In, First-Out) strategy.
-*   **Wrap Call Hooks**: Executed using a **FIFO** (First-In, First-Out) strategy. The first hook added is the outermost wrapper.
+* **Before Call Hooks**: Executed using a **LIFO** (Last Input - Last Output) strategy. The most recently added hook executes first.
+* **After Call Hooks**: Executed using a **LIFO** (Last Input - Last Output) strategy. The most recently added hook executes first.
+* **Wrap Call Hooks**: Executed using a **FIFO** (First Input - First Out) strategy. The first hook added becomes the outermost wrapper.
 
-### Example: Nested Tracing
-The `GraphTest.java` file contains examples like `testNestedNodeWrapHooks` and `testNestedNodeAndEdgeWrapHooks` which demonstrate how hooks can be used to build a trace of execution:
+### Example: Execution Trace
+
+The unit test `testNestedNodeWrapHooks` in `GraphTest.java` demonstrates this behavior. Suppose you have the following setup:
 
 ```java
 var workflow = new StateGraph<>(schema, State::new)
@@ -99,18 +105,19 @@ var workflow = new StateGraph<>(schema, State::new)
     .compile();
 ```
 
-In this setup, for `node_1`, the execution order would be:
-1. `before-global-2` (LIFO)
-2. `before-global-1` (LIFO)
-3. `wrap-global-1` (FIFO wrapper begins)
-4. (Node logic)
-5. `after-global-1` (LIFO)
+For `node_1`, the execution sequence will be:
 
-## Further Reading
-For practical implementations, refer to the following tests in the codebase:
-* `testNestedNodeWrapHooks`
-* `testNestedNodeAndEdgeWrapHooks`
-in `langgraph4j-core/src/test/java/org/bsc/langgraph4j/GraphTest.java`.
+1. **`before-global-2`** (LIFO: added last, runs first)
+2. **`before-global-1`** (LIFO: added first, runs second)
+3. **`wrap-global-1`** (FIFO: outermost wrapper)
+4. **(Node logic)**
+5. **`after-global-1`** (LIFO)
 
+## Use Cases
 
+* **Tracing/Logging**: Capture the entry and exit of every node.
+* **State Transformation**: Modify the state before it reaches a node or before it is saved.
+* **Dynamic Routing**: Use edge hooks to override or log conditional routing decisions.
+* **Performance Monitoring**: Measure the execution time of nodes using wrap hooks.
 
+For practical implementations and advanced nested hook examples, see the `testNestedNodeWrapHooks` and `testNestedNodeAndEdgeWrapHooks` methods in `langgraph4j-core/src/test/java/org/bsc/langgraph4j/GraphTest.java`.
