@@ -2,13 +2,13 @@ package org.bsc.langgraph4j.otel;
 
 import io.opentelemetry.api.OpenTelemetry;
 import io.opentelemetry.api.baggage.Baggage;
-import io.opentelemetry.api.common.AttributeKey;
 import io.opentelemetry.api.common.Attributes;
 import io.opentelemetry.api.metrics.*;
 import io.opentelemetry.api.trace.*;
 import io.opentelemetry.context.Context;
 import io.opentelemetry.context.Scope;
 import org.bsc.langgraph4j.GraphArgs;
+import org.bsc.langgraph4j.action.Command;
 import org.bsc.langgraph4j.action.InterruptionMetadata;
 import org.bsc.langgraph4j.checkpoint.BaseCheckpointSaver;
 import org.bsc.langgraph4j.serializer.StateSerializer;
@@ -19,12 +19,9 @@ import org.bsc.langgraph4j.RunnableConfig;
 import org.bsc.langgraph4j.GraphInput;
 
 import java.io.IOException;
-import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
-import java.util.function.Supplier;
 
 import static io.opentelemetry.api.common.AttributeKey.booleanKey;
 import static io.opentelemetry.api.common.AttributeKey.stringKey;
@@ -67,7 +64,7 @@ public interface Instrumentable {
         return attrsBuilder.build();
     }
 
-    static Attributes attrsOf(StateSerializer<?> serializer, Map<String,Object> data )  {
+    static Attributes attrsOf(Map<String,Object> data, StateSerializer<?> serializer )  {
         final var attrsBuilder = Attributes.builder();
 
         if( serializer instanceof PlainTextStateSerializer<?> textSerializer ) {
@@ -78,13 +75,12 @@ public interface Instrumentable {
             }
         }
         else {
-            data.forEach((key, value) ->
-                    attrsBuilder.put( format("lg4j.state.%s", key), value.toString()));
+            attrsBuilder.put( "lg4j.state", CollectionsUtils.toString(data));
         }
         return attrsBuilder.build();
     }
 
-    static Attributes attrsOf(StateSerializer<?> serializer, InterruptionMetadata<?> interruptionMetaData ) {
+    static Attributes attrsOf(InterruptionMetadata<?> interruptionMetaData, StateSerializer<?> serializer  ) {
         final var attrsBuilder = Attributes.builder();
 
         attrsBuilder.put( "lg4j.nodeId", interruptionMetaData.nodeId());
@@ -101,9 +97,26 @@ public interface Instrumentable {
             }
         }
         else {
-            interruptionMetaData.state().data().forEach((key, value) ->
-                    attrsBuilder.put( format("lg4j.state.%s", key), value.toString()));
+            attrsBuilder.put( "lg4j.state", CollectionsUtils.toString(interruptionMetaData.state().data()));
         }
+        return attrsBuilder.build();
+    }
+
+    static Attributes attrsOf(Command command, StateSerializer<?> serializer  ) {
+        final var attrsBuilder = Attributes.builder();
+
+        attrsBuilder.put( "lg4j.command.gotoNode", command.gotoNodeSafe().orElse("null"));
+
+        if (serializer instanceof PlainTextStateSerializer<?> textSerializer) {
+            try {
+                attrsBuilder.put("lg4j.command.update", textSerializer.writeDataAsString(command.update()));
+            } catch (IOException e) {
+                otelLog.warn("OTEL state serialization error", e);
+            }
+        } else {
+            attrsBuilder.put("lg4j.state", CollectionsUtils.toString(command.update()));
+        }
+
         return attrsBuilder.build();
     }
 
@@ -125,151 +138,6 @@ public interface Instrumentable {
     }
 
     class TracerHolder {
-        @FunctionalInterface
-        public interface TryFunction<R> {
-            R apply(Span span) throws Exception;
-        }
-
-        public class SB implements SpanBuilder {
-
-            private final SpanBuilder delegate;
-
-            public SB(SpanBuilder delegate) {
-                this.delegate = requireNonNull(delegate, "delegate cannot be null");
-            }
-
-            @Override
-            public SB setParent(Context context) {
-                delegate.setParent(context);
-                return this;
-            }
-
-            @Override
-            public SB setNoParent() {
-                delegate.setNoParent();
-                return this;
-            }
-
-            @Override
-            public SB addLink(SpanContext spanContext) {
-                delegate.addLink(spanContext);
-                return this;
-            }
-
-            @Override
-            public SB addLink(SpanContext spanContext, Attributes attributes) {
-                delegate.addLink(spanContext, attributes);
-                return this;
-            }
-
-            @Override
-            public SB setAttribute(String s, String s1) {
-                delegate.setAttribute(s, s1);
-                return this;
-            }
-
-            @Override
-            public SB setAttribute(String s, long l) {
-                delegate.setAttribute(s, l);
-                return this;
-            }
-
-            @Override
-            public SB setAttribute(String s, double v) {
-                delegate.setAttribute(s, v);
-                return this;
-            }
-
-            @Override
-            public SB setAttribute(String s, boolean b) {
-                delegate.setAttribute(s, b);
-                return this;
-            }
-
-            @Override
-            public <T> SB setAttribute(AttributeKey<T> attributeKey, T t) {
-                delegate.setAttribute(attributeKey, t);
-                return this;
-            }
-
-            @Override
-            public SB setAttribute(AttributeKey<Long> key, int value) {
-                delegate.setAttribute(key, value);
-                return this;
-            }
-
-            @Override
-            public SB setAllAttributes(Attributes attributes) {
-                delegate.setAllAttributes(attributes);
-                return this;
-            }
-
-            public SB setAllAttributes(RunnableConfig config) {
-                delegate.setAllAttributes(attrsOf(config));
-                return this;
-            }
-
-            public SB setAttribute(GraphInput input) {
-                delegate.setAllAttributes(attrsOf(input));
-                return this;
-            }
-
-            @Override
-            public SB setSpanKind(SpanKind spanKind) {
-                delegate.setSpanKind(spanKind);
-                return this;
-            }
-
-            @Override
-            public SB setStartTimestamp(long l, TimeUnit timeUnit) {
-                delegate.setStartTimestamp(l, timeUnit);
-                return this;
-            }
-
-            @Override
-            public SB setStartTimestamp(Instant startTimestamp) {
-                delegate.setStartTimestamp(startTimestamp);
-                return this;
-            }
-
-            @Override
-            public Span startSpan() {
-                return delegate.startSpan();
-            }
-
-            public <R> R tryStartSpan(TryFunction<R> function) throws Exception {
-                requireNonNull(function, "function cannot be null");
-                var span = delegate.startSpan();
-
-                try {
-                    var result = function.apply(span);
-                    span.setStatus(StatusCode.OK);
-                    return result;
-                } catch (Exception e) {
-                    if (span.isRecording()) {
-                        span.recordException(e);
-                    }
-                    throw e;
-                } finally {
-                    span.end();
-                }
-
-            }
-
-            public <R> R startSpan(Function<Span, R> function) {
-                requireNonNull(function, "function cannot be null");
-                var span = delegate.startSpan();
-
-                try {
-                    var result = function.apply(span);
-                    span.setStatus(StatusCode.OK);
-                    return result;
-                } finally {
-                    span.end();
-                }
-
-            }
-        }
 
         final String scope;
         final OpenTelemetry otel;
@@ -279,29 +147,50 @@ public interface Instrumentable {
             this.otel = requireNonNull(otel, "otel cannot be null");
         }
 
-        public TracerHolder(Instrumentable owner) {
-            this(requireNonNull(owner, "owner cannot be null").otel(), owner.getClass().getName());
-        }
-
         public Tracer object() {
             return otel.getTracer(scope);
         }
 
-        public SB spanBuilder(String spanName) {
-            return new SB(object().spanBuilder(requireNonNull(spanName, "spanName cannot be null")));
+        public SpanBuilder spanBuilder(String spanName) {
+            return object().spanBuilder(requireNonNull(spanName, "spanName cannot be null"));
         }
 
         public Optional<Span> currentSpan() {
             return ( Span.current().isRecording() ) ? Optional.of(Span.current()) : Optional.empty();
         }
-    }
 
-    default <T extends TracerHolder> T tracer( Supplier<T> tracerHolderFactory ) {
-        return requireNonNull(tracerHolderFactory, "tracerHolderFactory cannot be null").get();
-    }
+        public <R> R tryApplySpan(Span span, TryFunction<Span,R,Exception> function) throws Exception {
+            requireNonNull(span, "span cannot be null");
+            requireNonNull(function, "function cannot be null");
 
-    default TracerHolder tracer() {
-        return tracer( () -> new TracerHolder( this ) );
+            try {
+                var result = function.apply(span);
+                span.setStatus(StatusCode.OK);
+                return result;
+            } catch (Exception e) {
+                if (span.isRecording()) {
+                    span.recordException(e);
+                }
+                throw e;
+            } finally {
+                span.end();
+            }
+
+        }
+
+        public <R> R applySpan(Span span, Function<Span, R> function) {
+            requireNonNull(span, "span cannot be null");
+            requireNonNull(function, "function cannot be null");
+            try {
+                var result = function.apply(span);
+                span.setStatus(StatusCode.OK);
+                return result;
+            } finally {
+                span.end();
+            }
+
+        }
+
     }
 
     class MeterHolder {
@@ -311,9 +200,6 @@ public interface Instrumentable {
         public MeterHolder( OpenTelemetry otel, String scope ) {
             this.scope = requireNonNull( scope, "scope cannot be null");
             this.otel = requireNonNull(otel, "otel cannot be null");
-        }
-        public MeterHolder( Instrumentable owner ) {
-            this( requireNonNull(owner, "owner cannot be null").otel(), owner.getClass().getName() );
         }
 
         public Meter object() {
@@ -336,14 +222,6 @@ public interface Instrumentable {
             return object().upDownCounterBuilder( requireNonNull(upDownCounterName, "upDownCounterName cannot be null"));
         }
 
-    }
-
-    default <T extends MeterHolder> T meter( Supplier<T> meterHolderFactory ) {
-        return requireNonNull(meterHolderFactory, "meterHolderFactory cannot be null").get();
-    }
-
-    default MeterHolder meter() {
-        return meter( () -> new MeterHolder( this ) );
     }
 
 }
