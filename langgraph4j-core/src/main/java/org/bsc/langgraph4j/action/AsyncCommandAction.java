@@ -40,7 +40,6 @@ public interface AsyncCommandAction<S extends AgentState> extends BiFunction<S, 
         };
     }
 
-
     /**
      * Creates an {@link AsyncCommandAction} from a synchronous {@link CommandAction}.
      *
