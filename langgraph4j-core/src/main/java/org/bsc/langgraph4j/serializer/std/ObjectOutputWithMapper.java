@@ -1,5 +1,6 @@
 package org.bsc.langgraph4j.serializer.std;
 
+import org.bsc.langgraph4j.LG4JLoggable;
 import org.bsc.langgraph4j.serializer.Serializer;
 
 import java.io.IOException;
@@ -7,8 +8,7 @@ import java.io.ObjectOutput;
 import java.util.Objects;
 import java.util.Optional;
 
-class ObjectOutputWithMapper implements ObjectOutput {
-    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ObjectOutputWithMapper.class);
+class ObjectOutputWithMapper implements ObjectOutput, LG4JLoggable {
     private final ObjectOutput out;
     private final SerializerMapper mapper;
 

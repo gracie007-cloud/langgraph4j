@@ -2,9 +2,10 @@ package org.bsc.langgraph4j.utils;
 
 import java.util.function.Supplier;
 
+import org.bsc.langgraph4j.LG4JLoggable;
+
 @FunctionalInterface
-public interface TrySupplier<R, Ex extends Throwable> extends Supplier<R> {
-    org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(TrySupplier.class);
+public interface TrySupplier<R, Ex extends Throwable> extends Supplier<R>, LG4JLoggable {
 
     R tryGet() throws Ex;
 

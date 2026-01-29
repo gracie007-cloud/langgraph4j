@@ -3,6 +3,8 @@ package org.bsc.langgraph4j.state;
 import java.util.*;
 import java.util.function.Supplier;
 
+import org.bsc.langgraph4j.LG4JLoggable;
+
 import static java.util.Collections.unmodifiableList;
 import static java.util.Optional.ofNullable;
 import static org.bsc.langgraph4j.state.AgentState.MARK_FOR_REMOVAL;
@@ -16,8 +18,7 @@ import static org.bsc.langgraph4j.state.AgentState.MARK_FOR_RESET;
  * @param <T> the type of the values being accumulated
  * @see Channel
  */
-public class AppenderChannel<T> implements Channel<List<T>> {
-    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(AppenderChannel.class);
+public class AppenderChannel<T> implements Channel<List<T>>, LG4JLoggable {
     /**
      * A functional interface that is used to remove elements from a list.
      *

@@ -2,9 +2,10 @@ package org.bsc.langgraph4j.utils;
 
 import java.util.function.Function;
 
+import org.bsc.langgraph4j.LG4JLoggable;
+
 @FunctionalInterface
-public interface TryFunction<T, R, Ex extends Throwable> extends Function<T,R> {
-    org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(TryFunction.class);
+public interface TryFunction<T, R, Ex extends Throwable> extends Function<T,R>, LG4JLoggable {
 
     R tryApply( T t ) throws Ex;
 
