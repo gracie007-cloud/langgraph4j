@@ -1,6 +1,8 @@
 package org.bsc.langgraph4j;
 
+import org.bsc.langgraph4j.action.SubCompiledGraphNodeAction;
 import org.bsc.langgraph4j.internal.node.ParallelNode;
+import org.bsc.langgraph4j.utils.CollectionsUtils;
 import org.bsc.langgraph4j.utils.TypeRef;
 
 import java.util.Map;
@@ -9,7 +11,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.Executor;
 
-import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 import static java.util.Optional.ofNullable;
 
@@ -28,6 +29,7 @@ public final class RunnableConfig implements HasMetadata {
     public static final String NODE_ID = "LG4j_NODE_ID";
     public static final String GRAPH_PATH = "LG4j_GRAPH_PATH";
     public static final String GRAPH_ID = "LG4j_GRAPH_ID";
+    public static final String SUBGRAPH_RESUME_UPDATE_DATA = "LG4j_SUBGRAPH_UPDATE_DATA";
 
     private final String threadId;
     private final String checkPointId;
@@ -156,6 +158,10 @@ public final class RunnableConfig implements HasMetadata {
     public GraphPath graphPath() {
         return metadata(GRAPH_PATH, new TypeRef<GraphPath>() {})
                 .orElseGet(GraphPath::empty);
+    }
+
+    public boolean isResumeSubgraph() {
+        return metadata( SubCompiledGraphNodeAction.resumeSubGraphId( nodeId() )).isPresent();
     }
 
     /**
@@ -287,11 +293,12 @@ public final class RunnableConfig implements HasMetadata {
 
     @Override
     public String toString() {
-        return  format("RunnableConfig{ threadId=%s, checkPointId=%s, nextNode=%s, streamMode=%s }" ,
+        return  "RunnableConfig{ threadId=%s, checkPointId=%s, nextNode=%s, streamMode=%s } metadata: %s".formatted(
                 threadId,
                 checkPointId,
                 nextNode,
-                streamMode
+                streamMode,
+                CollectionsUtils.toString(metadata)
                 );
     }
 
