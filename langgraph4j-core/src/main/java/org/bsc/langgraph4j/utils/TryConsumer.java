@@ -2,9 +2,10 @@ package org.bsc.langgraph4j.utils;
 
 import java.util.function.Consumer;
 
+import org.bsc.langgraph4j.LG4JLoggable;
+
 @FunctionalInterface
-public interface TryConsumer<T, Ex extends Throwable> extends Consumer<T> {
-    org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(TryConsumer.class);
+public interface TryConsumer<T, Ex extends Throwable> extends Consumer<T>, LG4JLoggable {
 
     void tryAccept( T t ) throws Ex;
 

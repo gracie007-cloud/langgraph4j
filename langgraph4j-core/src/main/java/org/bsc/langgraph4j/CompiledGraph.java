@@ -15,7 +15,6 @@ import org.bsc.langgraph4j.state.AgentState;
 import org.bsc.langgraph4j.state.AgentStateFactory;
 import org.bsc.langgraph4j.state.StateSnapshot;
 import org.bsc.langgraph4j.utils.TryFunction;
-import org.bsc.langgraph4j.utils.TypeRef;
 
 import java.io.IOException;
 import java.util.*;
@@ -31,8 +30,6 @@ import static java.util.Objects.requireNonNull;
 import static java.util.Optional.ofNullable;
 import static java.util.concurrent.CompletableFuture.completedFuture;
 import static java.util.stream.Collectors.toList;
-import static org.bsc.langgraph4j.StateGraph.END;
-import static org.bsc.langgraph4j.StateGraph.START;
 
 /**
  * Represents a compiled graph of nodes and edges.
@@ -40,8 +37,7 @@ import static org.bsc.langgraph4j.StateGraph.START;
  *
  * @param <State> the type of the state associated with the graph
  */
-public final class CompiledGraph<State extends AgentState> implements GraphDefinition<State> {
-    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(CompiledGraph.class);
+public final class CompiledGraph<State extends AgentState> implements GraphDefinition<State>, LG4JLoggable {
 
     private static final String INTERRUPT_AFTER = "__INTERRUPTED__";
 
@@ -378,8 +374,8 @@ public final class CompiledGraph<State extends AgentState> implements GraphDefin
         return compileConfig.interruptsBefore().contains(nodeId);
     }
 
-    private boolean shouldInterruptAfter(String nodeId, String previousNodeId ) {
-        if( nodeId == null || Objects.equals(nodeId, previousNodeId) ) { // FIX RESUME ERROR
+    private boolean shouldInterruptAfter(String nodeId, String currentNodeId ) {
+        if( nodeId == null || Objects.equals(nodeId, currentNodeId) ) { // FIX RESUME ERROR
             return false;
         }
         return ( compileConfig.interruptBeforeEdge() && Objects.equals(nodeId, INTERRUPT_AFTER )) ||

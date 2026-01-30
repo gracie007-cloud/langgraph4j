@@ -1,5 +1,6 @@
 package org.bsc.langgraph4j.checkpoint;
 
+import org.bsc.langgraph4j.LG4JLoggable;
 import org.bsc.langgraph4j.RunnableConfig;
 import org.bsc.langgraph4j.serializer.Serializer;
 import org.bsc.langgraph4j.serializer.StateSerializer;
@@ -28,8 +29,7 @@ import static java.lang.String.format;
  * </p>
  *
  */
-public class FileSystemSaver extends MemorySaver {
-    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(FileSystemSaver.class);
+public class FileSystemSaver extends MemorySaver implements LG4JLoggable {
     public static final String EXTENSION = ".saver";
 
     private final Path targetFolder;

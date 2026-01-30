@@ -4,7 +4,7 @@
 
     <groupId>org.bsc.langgraph4j</groupId>
     <artifactId>langgraph4j-parent</artifactId>
-    <version>1.8.0-beta4</version>
+    <version>1.8.0-beta5</version>
     <packaging>pom</packaging>
 
     <name>langgraph4j::parent</name>
@@ -237,6 +237,8 @@
         <module>langgraph4j-postgres-saver</module>
         <module>langgraph4j-oracle-saver</module>
         <module>langgraph4j-mysql-saver</module>
+
+        <module>langgraph4j-opentelemetry</module>
 
         <!-- LangGraph4j how-tos and examples, new examples repository: https://github.com/langgraph4j/langgraph4j-examples -->
         <module>how-tos</module>

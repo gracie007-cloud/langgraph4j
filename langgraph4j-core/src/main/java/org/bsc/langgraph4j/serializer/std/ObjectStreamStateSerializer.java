@@ -1,5 +1,6 @@
 package org.bsc.langgraph4j.serializer.std;
 
+import org.bsc.langgraph4j.LG4JLoggable;
 import org.bsc.langgraph4j.serializer.Serializer;
 import org.bsc.langgraph4j.serializer.StateSerializer;
 import org.bsc.langgraph4j.state.AgentState;
@@ -10,8 +11,8 @@ import java.io.ObjectInput;
 import java.io.ObjectOutput;
 import java.util.*;
 
-public class ObjectStreamStateSerializer<State extends AgentState> extends StateSerializer<State> {
-    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ObjectStreamStateSerializer.class);
+public class ObjectStreamStateSerializer<State extends AgentState> extends StateSerializer<State> implements LG4JLoggable{
+
     static class ListSerializer implements NullableObjectSerializer<List<Object>> {
 
         @Override
