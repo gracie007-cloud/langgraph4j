@@ -184,11 +184,11 @@ public final class CompiledGraph<State extends AgentState> implements GraphDefin
      * @return collection of StateSnapshots of the given Thread ID. The first element of collection is the last state
      */
     public Collection<StateSnapshot<State>> getStateHistory( RunnableConfig config ) {
-        BaseCheckpointSaver saver = compileConfig.checkpointSaver().orElseThrow( () -> (new IllegalStateException("Missing CheckpointSaver!")) );
+        final var saver = compileConfig.checkpointSaver().orElseThrow( () -> (new IllegalStateException("Missing CheckpointSaver!")) );
 
         return saver.list(config).stream()
                 .map( checkpoint -> StateSnapshot.of( checkpoint, config, stateGraph.getStateFactory() ) )
-                .collect(toList());
+                .toList();
     }
 
 
@@ -211,7 +211,7 @@ public final class CompiledGraph<State extends AgentState> implements GraphDefin
      * @throws IllegalStateException if the saver is not defined
      */
     public Optional<StateSnapshot<State>> stateOf( RunnableConfig config ) {
-        BaseCheckpointSaver saver = compileConfig.checkpointSaver().orElseThrow( () -> (new IllegalStateException("Missing CheckpointSaver!")) );
+        final var saver = compileConfig.checkpointSaver().orElseThrow( () -> (new IllegalStateException("Missing CheckpointSaver!")) );
 
         return saver.get(config)
                 .map( checkpoint -> StateSnapshot.of( checkpoint, config, stateGraph.getStateFactory() ) );
@@ -240,24 +240,24 @@ public final class CompiledGraph<State extends AgentState> implements GraphDefin
      */
     public RunnableConfig updateState( RunnableConfig config, Map<String,Object> values, String asNode ) throws Exception {
 
-        BaseCheckpointSaver saver = compileConfig.checkpointSaver().orElseThrow( () -> (new IllegalStateException("Missing CheckpointSaver!")) );
+        final var saver = compileConfig.checkpointSaver().orElseThrow( () -> (new IllegalStateException("Missing CheckpointSaver!")) );
 
         // merge values with checkpoint values
-        Checkpoint branchCheckpoint = saver.get(config)
+        var branchCheckpoint = saver.get(config)
                             .map(Checkpoint::copyOf)
                             .map( cp -> cp.updateState(values, stateGraph.getChannels()) )
                             .orElseThrow( () -> (new IllegalStateException("Missing Checkpoint!")) );
 
         String nextNodeId = null;
         if( asNode != null ) {
-            var nextNodeCommand = nextNodeId( asNode, branchCheckpoint.getState(), config );
+            final var nextNodeCommand = nextNodeId( asNode, branchCheckpoint.getState(), config );
 
             nextNodeId = nextNodeCommand.gotoNode();
             branchCheckpoint =  branchCheckpoint.updateState( nextNodeCommand.update(), stateGraph.getChannels(), nextNodeId );
 
         }
         // update checkpoint in saver
-        RunnableConfig newConfig = saver.put( config, branchCheckpoint );
+        final var newConfig = saver.put( config, branchCheckpoint );
 
         return RunnableConfig.builder(newConfig)
                                 .checkPointId( branchCheckpoint.getId() )
@@ -362,7 +362,7 @@ public final class CompiledGraph<State extends AgentState> implements GraphDefin
     }
 
     private Command entryPoint(Map<String,Object> state, RunnableConfig config ) throws Exception {
-        var entryPoint = this.edges.get(START);
+        final var entryPoint = this.edges.get(START);
         return nextNodeId(entryPoint, state, START, config);
     }
 
@@ -433,7 +433,7 @@ public final class CompiledGraph<State extends AgentState> implements GraphDefin
      * @return an AsyncGenerator stream of NodeOutput
      */
     public AsyncGenerator.Cancellable<NodeOutput<State>> stream( Map<String,Object> inputs, RunnableConfig config ) {
-        return stream(  ( inputs == null ) ? new GraphResume() : new GraphArgs(inputs), config );
+        return stream(  ( inputs == null ) ? GraphInput.resume() : GraphInput.args(inputs), config );
     }
 
     /**
@@ -443,7 +443,7 @@ public final class CompiledGraph<State extends AgentState> implements GraphDefin
      * @return an AsyncGenerator stream of NodeOutput
      */
     public AsyncGenerator<NodeOutput<State>> stream(Map<String,Object> inputs ) {
-        return this.stream( GraphInput.args(inputs), RunnableConfig.builder().build() );
+        return this.stream( ( inputs == null ) ? GraphInput.resume() : GraphInput.args(inputs), RunnableConfig.builder().build() );
     }
 
     /**
@@ -469,7 +469,7 @@ public final class CompiledGraph<State extends AgentState> implements GraphDefin
      * @return an AsyncGenerator stream of NodeOutput
      */
     public AsyncGenerator.Cancellable<NodeOutput<State>> streamSnapshots( Map<String,Object> inputs, RunnableConfig config )  {
-        return streamSnapshots( ( inputs == null ) ? new GraphResume() : new GraphArgs(inputs), config );
+        return streamSnapshots( ( inputs == null ) ? GraphInput.resume() : GraphInput.args(inputs), config );
     }
 
     /**
@@ -509,7 +509,7 @@ public final class CompiledGraph<State extends AgentState> implements GraphDefin
      * @return an Optional containing the final state if present, otherwise an empty Optional
      */
     public Optional<State> invoke(Map<String,Object> inputs, RunnableConfig config ) {
-        return invokeFinal( GraphInput.args(inputs), config ).map( NodeOutput::state);
+        return invokeFinal( inputs == null ? GraphInput.resume() : GraphInput.args(inputs), config ).map( NodeOutput::state);
     }
 
     /**
@@ -519,7 +519,7 @@ public final class CompiledGraph<State extends AgentState> implements GraphDefin
      * @return an Optional containing the final state if present, otherwise an empty Optional
      */
     public Optional<State> invoke(Map<String,Object> inputs )  {
-        return invokeFinal( GraphInput.args(inputs), RunnableConfig.builder().build() ).map( NodeOutput::state);
+        return invokeFinal( inputs == null ? GraphInput.resume() : GraphInput.args(inputs), RunnableConfig.builder().build() ).map( NodeOutput::state);
     }
 
 
@@ -660,7 +660,6 @@ public final class CompiledGraph<State extends AgentState> implements GraphDefin
         protected AsyncNodeGenerator(GraphInput input, RunnableConfig config )  {
 
             if( input instanceof GraphResume resumeRequest ) {
-
                 log.trace( "RESUME REQUEST" );
 
                 var saver = compileConfig.checkpointSaver()
@@ -668,19 +667,18 @@ public final class CompiledGraph<State extends AgentState> implements GraphDefin
                 var startCheckpoint = saver.get( config )
                         .orElseThrow( () -> (new IllegalStateException("Resume request without a valid checkpoint!")) );
 
+                final var configBuilder = RunnableConfig.builder(config)
+                        .checkPointId(null); // Reset checkpoint id
+
                 var startCheckpointNextNodeAction = nodes.get(startCheckpoint.getNextNodeId());
                 if( startCheckpointNextNodeAction instanceof SubCompiledGraphNodeAction<State> action ) {
 
                     // RESUME FORM SUBGRAPH DETECTED
-
-                    this.config = RunnableConfig.builder(config)
-                                 .checkPointId(null) // Reset checkpoint id
-                                .addMetadata( action.resumeSubGraphId(), true) // add metadata for sub graph
-                                .build();
+                   this.config = configBuilder.addMetadata( action.resumeSubGraphId(), true).build();
                 }
                 else {
                     // Reset checkpoint id
-                    this.config = config.withCheckPointId( null );
+                    this.config = configBuilder.build();
 
                 }
 
