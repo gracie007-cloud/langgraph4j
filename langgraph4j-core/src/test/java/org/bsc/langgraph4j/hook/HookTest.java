@@ -22,7 +22,7 @@ import static java.util.concurrent.CompletableFuture.completedFuture;
 import static org.bsc.langgraph4j.utils.CollectionsUtils.mergeMap;
 import static org.junit.jupiter.api.Assertions.*;
 
-public class HookTest implements Logging {
+public class HookTest implements LG4JLoggable {
 
 
     static class State extends MessagesState<String> {
@@ -136,8 +136,8 @@ public class HookTest implements Logging {
 
         var action = NodeActionBuilder.of().nodeId("node_1").buildAction(CompileConfig.builder().build());
 
-        var hook1 = new NestedNodeHook<State>("level1", schema);
-        var hook2 = new NestedNodeHook<State>("level2", schema);
+        var hook1 = NestedNodeHook.<State>of("level1");
+        var hook2 = NestedNodeHook.<State>of("level2");
         
         var state = stateFactory().apply(Map.of());
 
@@ -146,12 +146,12 @@ public class HookTest implements Logging {
 
         var hooks = new NodeHooks<State>();
 
-        hooks.beforeCalls.add( hook1 );
-        hooks.beforeCalls.add( hook2 );
-        hooks.wrapCalls.add( hook1 );
-        hooks.wrapCalls.add( hook2 );
-        hooks.afterCalls.add( hook1 );
-        hooks.afterCalls.add( hook2 );
+        hooks.beforeCalls.add( hook1.applyBeforeHook(  schema) );
+        hooks.beforeCalls.add( hook2.applyBeforeHook(  schema) );
+        hooks.wrapCalls.add( hook1.applyWrapHook() );
+        hooks.wrapCalls.add( hook2.applyWrapHook() );
+        hooks.afterCalls.add( hook1.applyAfterHook( schema ) );
+        hooks.afterCalls.add( hook2.applyAfterHook( schema ) );
 
         var beforeCallResult = hooks.beforeCalls.apply( nodeId, state, config, State::new, schema  ).join();
 
@@ -197,8 +197,8 @@ public class HookTest implements Logging {
                         .target( StateGraph.END)
                         .build();
 
-        var hook1 = new NestedEdgeHook<State>("level1", schema);
-        var hook2 = new NestedEdgeHook<State>("level2", schema);
+        var hook1 = NestedEdgeHook.<State>of("level1");
+        var hook2 = NestedEdgeHook.<State>of("level2");
 
         var state = stateFactory().apply(Map.of());
 
@@ -206,12 +206,12 @@ public class HookTest implements Logging {
 
         var hooks = new EdgeHooks<State>();
 
-        hooks.beforeCalls.add( hook1 );
-        hooks.beforeCalls.add( hook2 );
-        hooks.wrapCalls.add( hook1 );
-        hooks.wrapCalls.add( hook2 );
-        hooks.afterCalls.add( hook1 );
-        hooks.afterCalls.add( hook2 );
+        hooks.beforeCalls.add( hook1.applyBeforeHook() );
+        hooks.beforeCalls.add( hook2.applyBeforeHook() );
+        hooks.wrapCalls.add( hook1.applyWrapHook() );
+        hooks.wrapCalls.add( hook2.applyWrapHook() );
+        hooks.afterCalls.add( hook1.applyAfterHook( schema ) );
+        hooks.afterCalls.add( hook2.applyAfterHook( schema ) );
 
         var beforeCallResult = hooks.beforeCalls.apply( sourceId, state, config, State::new, schema  ).join();
 
