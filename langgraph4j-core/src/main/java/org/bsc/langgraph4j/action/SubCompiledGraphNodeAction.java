@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
+import static java.util.Objects.requireNonNull;
 import static java.util.concurrent.CompletableFuture.completedFuture;
 import static java.util.concurrent.CompletableFuture.failedFuture;
 
@@ -29,12 +30,21 @@ public record SubCompiledGraphNodeAction<State extends AgentState>(
         CompiledGraph<State> subGraph
 ) implements AsyncNodeActionWithConfig<State> {
 
+    public static String subGraphId( String nodeId ) {
+        return  "subgraph_%s".formatted( requireNonNull( nodeId, "nodeId cannot be null!"));
+
+    }
+
+    public static String resumeSubGraphId( String nodeId ) {
+        return  "resume_%s".formatted( subGraphId(nodeId));
+
+    }
     public String subGraphId() {
-        return "subgraph_%s".formatted(nodeId);
+        return subGraphId(nodeId);
     }
 
     public String resumeSubGraphId() {
-        return  "resume_%s".formatted(subGraphId());
+        return  resumeSubGraphId(nodeId);
     }
 
     /**
@@ -79,14 +89,9 @@ public record SubCompiledGraphNodeAction<State extends AgentState>(
 
         try {
 
-            var input = resumeSubgraph ?
-                    GraphInput.resume(state.data()) :
+            final GraphInput input = ( resumeSubgraph ) ?
+                    GraphInput.resume( state.data() ) :
                     GraphInput.args(state.data());
-//            var input =  GraphInput.args(state.data());
-//            if( resumeSubgraph ) {
-//                subGraphRunnableConfig = subGraph.updateState(subGraphRunnableConfig, state.data());
-//                input = GraphInput.resume();
-//            }
 
             var generator = subGraph.stream(input, subGraphRunnableConfig)
                     .map( n -> SubGraphOutputFactory.createFromNodeOutput( n, nodeId) );

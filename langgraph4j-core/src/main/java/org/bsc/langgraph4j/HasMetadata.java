@@ -45,18 +45,6 @@ public interface HasMetadata {
     Set<String> metadataKeys();
 
 
-    /**
-     * return metadata value for key
-     *
-     * @param key given metadata key
-     * @return metadata value for key if any
-     * @deprecated use {@link #metadata(String)} instead
-     */
-    @Deprecated( forRemoval = true )
-    default Optional<Object> getMetadata(String key ) {
-        return metadata(key);
-    };
-
     class Builder<B extends Builder<B>> {
         private Map<String,Object> metadata;
 
@@ -95,6 +83,17 @@ public interface HasMetadata {
         }
 
         @SuppressWarnings("unchecked")
+        public B putMetadataIfAbsent( String key, Object value ) {
+            requireNonNull(key, "key cannot be null");
+            if( metadata == null ) {
+                // Lazy initialization of metadata map
+                metadata = new HashMap<>();
+            }
+            metadata.putIfAbsent( key, value);
+            return (B)this;
+        }
+
+        @SuppressWarnings("unchecked")
         public B addMetadata( String key, Object value ) {
             requireNonNull(key, "key cannot be null");
             if( metadata == null ) {
@@ -110,7 +109,16 @@ public interface HasMetadata {
             metadata.put( key, value);
 
             return (B)this;
-        };
+        }
+
+        @SuppressWarnings("unchecked")
+        public B removeMetadata( String key ) {
+            if( metadata != null ) {
+                metadata.remove(requireNonNull(key, "key cannot be null"));
+            }
+            return (B)this;
+        }
+
     }
 
 }

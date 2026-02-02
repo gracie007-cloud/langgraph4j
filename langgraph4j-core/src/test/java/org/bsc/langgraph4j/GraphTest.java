@@ -30,7 +30,7 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Unit test for simple App.
  */
-public class GraphTest implements Logging {
+public class GraphTest implements LG4JLoggable {
 
     static class State extends MessagesState<String> {
 
@@ -635,10 +635,10 @@ public class GraphTest implements Logging {
                 Map.of( NestedNodeHook.HOOKS_ATTRIBUTE, new RegisterHookChannel() ));
 
         var workflow = new StateGraph<>(schema, State::new)
-                .addWrapCallNodeHook( new NestedNodeHook<>("wrap-global-1", schema))
-                .addBeforeCallNodeHook( new NestedNodeHook<>("before-global-1"))
-                .addBeforeCallNodeHook( new NestedNodeHook<>("before-global-2"))
-                .addAfterCallNodeHook( new NestedNodeHook<>("after-global-1"))
+                .addWrapCallNodeHook( NestedNodeHook.<State>of("wrap-global-1").applyWrapHook() )
+                .addBeforeCallNodeHook( NestedNodeHook.<State>of("before-global-1").applyBeforeHook(schema))
+                .addBeforeCallNodeHook( NestedNodeHook.<State>of("before-global-2").applyBeforeHook(schema))
+                .addAfterCallNodeHook( NestedNodeHook.<State>of("after-global-1").applyAfterHook(schema) )
                 .addNode("node_1", actionBuilder().nodeId("node_1").build() )
                 .addNode("node_2", actionBuilder().nodeId("node_2").build() )
                 .addNode("node_3", actionBuilder().nodeId("node_3").build() )
@@ -680,11 +680,11 @@ public class GraphTest implements Logging {
         };
 
         var workflow = new StateGraph<>(schema, State::new)
-                .addWrapCallNodeHook( new NestedNodeHook<>("wrap-global-1", schema))
-                .addBeforeCallNodeHook( new NestedNodeHook<>("before-global-1"))
-                .addBeforeCallNodeHook( new NestedNodeHook<>("before-global-2"))
-                .addAfterCallNodeHook( new NestedNodeHook<>("after-global-1"))
-                .addAfterCallEdgeHook( "node_2", afterEdgeHookGoToEnd )
+                .addWrapCallNodeHook( NestedNodeHook.<State>of("wrap-global-1").applyWrapHook())
+                .addBeforeCallNodeHook( NestedNodeHook.<State>of("before-global-1").applyBeforeHook(schema))
+                .addBeforeCallNodeHook( NestedNodeHook.<State>of("before-global-2").applyBeforeHook(schema))
+                .addAfterCallNodeHook( NestedNodeHook.<State>of("after-global-1").applyAfterHook(schema))
+                .addAfterCallEdgeHook( "node_2", afterEdgeHookGoToEnd)
                 .addNode("node_1", actionBuilder().nodeId("node_1").build() )
                 .addNode("node_2", actionBuilder().nodeId("node_2").build() )
                 .addNode("node_3", actionBuilder().nodeId("node_3").build() )
