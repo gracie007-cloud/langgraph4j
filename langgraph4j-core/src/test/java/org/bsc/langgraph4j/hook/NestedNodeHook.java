@@ -1,56 +1,60 @@
 package org.bsc.langgraph4j.hook;
 
-import org.bsc.langgraph4j.Logging;
-import org.bsc.langgraph4j.RunnableConfig;
-import org.bsc.langgraph4j.action.AsyncNodeActionWithConfig;
+import org.bsc.langgraph4j.LG4JLoggable;
 import org.bsc.langgraph4j.state.AgentState;
 import org.bsc.langgraph4j.state.Channel;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 import static java.util.concurrent.CompletableFuture.completedFuture;
+import static org.bsc.langgraph4j.utils.CollectionsUtils.mergeMap;
 
-public record NestedNodeHook<State extends AgentState>(String level, Map<String, Channel<?>> schema )
-        implements NodeHook.WrapCall<State>, NodeHook.BeforeCall<State>, NodeHook.AfterCall<State>, Logging {
+public record NestedNodeHook<State extends AgentState>( String level ) implements LG4JLoggable {
 
-    public static final String AFTER_CALL_ATTRIBUTE = "node-after-call";
-    public static final String HOOKS_ATTRIBUTE = "node-hooks";
+    public static String AFTER_CALL_ATTRIBUTE = "node-after-call";
+    public static String HOOKS_ATTRIBUTE = "node-hooks";
 
-    public NestedNodeHook(String level ) {
-        this( level, null);
+    public static <State extends AgentState> NestedNodeHook<State> of( String level ) {
+        return new NestedNodeHook<>(level);
     }
 
-    @Override
-    public CompletableFuture<Map<String, Object>> applyWrap(String nodeId, State state, RunnableConfig config, AsyncNodeActionWithConfig<State> action) {
+    public NodeHook.WrapCall<State> applyWrapHook() {
+        return (nodeId, state, config, action) -> {
+            log.info("node wrap call start: hook on '{}' level '{}'", nodeId, level);
+            return action.apply(state, config)
+                    .thenApply(result ->
+                            mergeMap( result, Map.of(HOOKS_ATTRIBUTE, Map.of( nodeId, List.of(level))), ( left, right ) -> right ))
+                    .whenComplete( ( result, exception ) -> {
+                        log.info("node wrap call end: hook on '{}' level '{}'", nodeId, level);
+                    });
 
-        log.info("node wrap call start: hook on '{}' level '{}'", nodeId, level);
-        return action.apply(state, config)
-                .thenApply(result -> (schema!=null) ?
-                        AgentState.updateState( result, Map.of(HOOKS_ATTRIBUTE, Map.of( nodeId, List.of(level))), schema ) :
-                        result )
-                .whenComplete( ( result, exception ) -> {
-                    log.info("node wrap call end: hook on '{}' level '{}'", nodeId, level);
-                });
+        };
     }
 
-    @Override
-    public CompletableFuture<Map<String, Object>> applyBefore(String nodeId, State state, RunnableConfig config) {
-        log.info("node before call start: hook on '{}' level '{}'", nodeId, level);
-        return completedFuture( Map.<String,Object>of(HOOKS_ATTRIBUTE, Map.of( nodeId, List.of(level))))
-                .whenComplete( ( result, exception ) ->
-                    log.info("node before call end: hook on '{}' level '{}'", nodeId, level));
+    public NodeHook.BeforeCall<State> applyBeforeHook( Map<String,Channel<?>> schema ) {
 
+        return (nodeId, state, config) -> {
+            log.info("node before call start: hook on '{}' level '{}'", nodeId, level);
+
+            final var newState = AgentState.updateState( state.data(),  Map.of(HOOKS_ATTRIBUTE, Map.of( nodeId, List.of(level))), schema);
+            return completedFuture(newState)
+                    .whenComplete( ( result, exception ) ->
+                            log.info("node before call end: hook on '{}' level '{}'", nodeId, level));
+
+        };
     }
 
-    @Override
-    public CompletableFuture<Map<String, Object>> applyAfter(String nodeId, State state, RunnableConfig config, Map<String, Object> lastResult) {
-        log.info("node after call start: hook on '{}' level '{}'", nodeId, level);
-        return completedFuture( (schema!=null) ?
-                AgentState.updateState( lastResult, Map.of( AFTER_CALL_ATTRIBUTE, 1), schema ) :
-                Map.<String,Object>of())
-                .whenComplete( ( result, exception ) ->
-                    log.info("node after call end: hook on '{}' level '{}'", nodeId, level));
+    public NodeHook.AfterCall<State> applyAfterHook( Map<String,Channel<?>> schema ) {
+        return (nodeId, state, config, lastResult) -> {
+            log.info("node after call start: hook on '{}' level '{}'", nodeId, level);
+
+
+            final var newResult = AgentState.updateState( lastResult,  Map.of(AFTER_CALL_ATTRIBUTE, 1), schema);
+
+            return completedFuture(newResult)
+                    .whenComplete((result, exception) ->
+                            log.info("node after call end: hook on '{}' level '{}'", nodeId, level));
+        };
     }
 }

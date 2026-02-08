@@ -7,8 +7,6 @@ import org.bsc.langgraph4j.LG4JLoggable;
 
 import static java.util.Collections.unmodifiableList;
 import static java.util.Optional.ofNullable;
-import static org.bsc.langgraph4j.state.AgentState.MARK_FOR_REMOVAL;
-import static org.bsc.langgraph4j.state.AgentState.MARK_FOR_RESET;
 
 
 /**

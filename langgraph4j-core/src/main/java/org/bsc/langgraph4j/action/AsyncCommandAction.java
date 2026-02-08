@@ -40,20 +40,6 @@ public interface AsyncCommandAction<S extends AgentState> extends BiFunction<S, 
         };
     }
 
-
-    /**
-     * Creates an {@link AsyncCommandAction} from a synchronous {@link CommandAction}.
-     *
-     * @param syncAction the synchronous command action to convert
-     * @param <S>        the type of the agent state
-     * @return an asynchronous command action
-     * @deprecated use {@link #command_async(CommandAction)} instead. This method will be removed in a future version.
-     */
-    @Deprecated( forRemoval = true )
-    static <S extends AgentState> AsyncCommandAction<S> node_async(CommandAction<S> syncAction) {
-        return command_async(syncAction);
-    }
-
     /**
      * Creates an {@link AsyncCommandAction} from an {@link AsyncEdgeAction}.
      * <p>

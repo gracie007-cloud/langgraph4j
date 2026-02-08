@@ -48,8 +48,9 @@ public class NodeHooks<State extends AgentState> {
             return Stream.concat( callListAsStream(), callMapAsStream(nodeId))
                     .reduce( completedFuture(state.data()),
                             (futureResult, call) ->
-                                    futureResult.thenCompose( result -> call.applyBefore(nodeId, stateFactory.apply(result), config)
-                                            .thenApply( partial -> AgentState.updateState( result, partial, schema ) )),
+                                    futureResult.thenCompose( result -> call.applyBefore(nodeId, stateFactory.apply(result), config)),
+                                            // Update state with partial result  returned by hook
+                                            //.thenApply( partial -> AgentState.updateState( result, partial, schema ) )),
                             (f1, f2) -> f1.thenCompose(v -> f2) // Combiner for parallel streams
                     );
         }
@@ -68,8 +69,9 @@ public class NodeHooks<State extends AgentState> {
             return Stream.concat( callListAsStream(), callMapAsStream(nodeId))
                     .reduce( completedFuture(partialResult),
                             (futureResult, call) ->
-                                    futureResult.thenCompose( result -> call.applyAfter( nodeId, state, config, result)
-                                            .thenApply( partial -> mergeMap(result, partial, ( oldValue, newValue) -> newValue ) )),
+                                    futureResult.thenCompose( result -> call.applyAfter( nodeId, state, config, result)),
+                                            // Merge original result with partial result returned by hook
+                                            //.thenApply( partial -> mergeMap(result, partial, ( oldValue, newValue) -> newValue ) )),
                             (f1, f2) -> f1.thenCompose(v -> f2) // Combiner for parallel streams
                     );
         }

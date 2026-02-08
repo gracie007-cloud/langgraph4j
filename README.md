@@ -1,7 +1,7 @@
 
 # 🦜🕸️ Welcome to LangGraph4j ( <i>AI Agentic workflow in Java</i> )
 
-![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg) [![docs](https://img.shields.io/badge/Site-Documentation-blue)][documentation] [![Static Badge](https://img.shields.io/badge/maven--snapshots-1.8--SNAPSHOT-blue)][snapshots] [![Maven Central](https://img.shields.io/maven-central/v/org.bsc.langgraph4j/langgraph4j-core.svg)][releases][![discord](https://img.shields.io/discord/1364514593765986365?logo=discord&style=flat)](https://discord.gg/szVVztSYKh)
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg) [![docs](https://img.shields.io/badge/Site-Documentation-blue)][documentation] [![DeepWiki](https://img.shields.io/badge/DeepWiki-docs-0b6?style=flat)](https://deepwiki.com/langgraph4j/langgraph4j) [![Static Badge](https://img.shields.io/badge/maven--snapshots-1.8--SNAPSHOT-blue)][snapshots] [![Maven Central](https://img.shields.io/maven-central/v/org.bsc.langgraph4j/langgraph4j-core.svg)][releases][![discord](https://img.shields.io/discord/1364514593765986365?logo=discord&style=flat)](https://discord.gg/szVVztSYKh)
 
 
 LangGraph for Java. A library for building stateful, multi-agents applications with LLMs, built for work with [langchain4j] and [Spring AI]
@@ -13,7 +13,7 @@ LangGraph for Java. A library for building stateful, multi-agents applications w
 
 | Date         | Release        | info
 |--------------|----------------| ---
-| Jan 30, 2026 | `1.8.0-beta5` | last release
+| Feb 7, 2026 | `1.8.1` | last release
 
 ‼️ **Note:**
 > The miminum supported version is the `Java 17` 
@@ -129,7 +129,7 @@ Make sure you are using Java 17 or later.
 **Latest Stable Version (Recommended):**
 ```xml
 <properties>
-    <langgraph4j.version>1.8.0-beta5</langgraph4j.version> <!-- Check for the actual latest version -->
+    <langgraph4j.version>1.8.1</langgraph4j.version> <!-- Check for the actual latest version -->
 </properties>
 
 <!-- Optional: Add the Bill of Materials (BOM) to manage langgraph4j module versions -->
@@ -442,6 +442,11 @@ We hope this guide helps you get started with LangGraph4j. Happy building!
 
 # References
 
+## AI Wiki
+
+* [DeepWiki](https://deepwiki.com/langgraph4j/langgraph4j)
+* [Content7](https://context7.com/langgraph4j/langgraph4j)
+
 ## Books
 
 * [Applied AI for Enterprise Java Development(Red Hat Developer e-books)](https://developers.redhat.com/e-books/applied-ai-enterprise-java-development)
@@ -506,7 +511,6 @@ We hope this guide helps you get started with LangGraph4j. Happy building!
 [how-tos/subgraph-as-nodeaction.ipynb]: how-tos/subgraph-as-nodeaction.ipynb
 [how-tos/subgraph-as-compiledgraph.ipynb]: how-tos/subgraph-as-compiledgraph.ipynb
 [how-tos/subgraph-as-stategraph.ipynb]: how-tos/subgraph-as-stategraph.ipynb
-
 
 
 
