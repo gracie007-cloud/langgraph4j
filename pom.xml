@@ -4,7 +4,7 @@
 
     <groupId>org.bsc.langgraph4j</groupId>
     <artifactId>langgraph4j-parent</artifactId>
-    <version>1.8.1</version>
+    <version>1.8.7</version>
     <packaging>pom</packaging>
 
     <name>langgraph4j::parent</name>
@@ -153,6 +153,11 @@
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-surefire-plugin</artifactId>
                     <version>3.2.5</version>
+                    <configuration>
+                        <systemPropertyVariables>
+                            <api.version>1.44</api.version>
+                        </systemPropertyVariables>
+                    </configuration>
                 </plugin>
 
                 <plugin>
@@ -231,8 +236,8 @@
         <!-- LangGraph4j studio and implementations-->
         <module>studio/base</module>
         <module>studio/jetty</module>
-        <module>studio/quarkus</module>
         <module>studio/springboot</module>
+        <!-- module>studio/quarkus</module -->
 
         <module>langgraph4j-postgres-saver</module>
         <module>langgraph4j-oracle-saver</module>

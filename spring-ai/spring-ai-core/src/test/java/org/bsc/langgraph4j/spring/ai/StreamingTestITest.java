@@ -30,6 +30,7 @@ import reactor.core.publisher.Flux;
 
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 
 import static java.util.concurrent.CompletableFuture.failedFuture;
 import static org.bsc.langgraph4j.StateGraph.END;
@@ -57,40 +58,48 @@ public class StreamingTestITest {
 
     enum AiModel {
 
-        OPENAI_GPT_4O_MINI(
+        OPENAI( ( model ) ->
                 OpenAiChatModel.builder()
                         .openAiApi(OpenAiApi.builder()
                                 .baseUrl("https://api.openai.com")
                                 .apiKey(System.getenv("OPENAI_API_KEY"))
                                 .build())
                         .defaultOptions(OpenAiChatOptions.builder()
-                                .model("gpt-4o-mini")
+                                .model(model)
                                 .logprobs(false)
                                 .temperature(0.1)
                                 .build())
                         .build()),
-        OLLAMA_QWEN3_14B(
+        DEEPSEEK( ( model ) ->
+                OpenAiChatModel.builder()
+                        .openAiApi(OpenAiApi.builder()
+                                .baseUrl("https://api.deepseek.com/")
+                                .apiKey(System.getenv("DEEPSEEK_API_KEY"))
+                                .build())
+                        .defaultOptions(OpenAiChatOptions.builder()
+                                .model(model)
+                                .logprobs(false)
+                                .temperature(0.1)
+                                .build())
+                        .build()),
+        OLLAMA( ( model ) ->
                 OllamaChatModel.builder()
                         .ollamaApi( OllamaApi.builder().baseUrl("http://localhost:11434").build() )
                         .defaultOptions(OllamaChatOptions.builder()
-                                .model("qwen3.1:14b")
+                                .model(model)
                                 .temperature(0.1)
                                 .build())
-                        .build() ),
-        OLLAMA_QWEN2_5_7B(
-                OllamaChatModel.builder()
-                        .ollamaApi( OllamaApi.builder().baseUrl("http://localhost:11434").build() )
-                        .defaultOptions(OllamaChatOptions.builder()
-                                .model("qwen2.5:7b")
-                                .temperature(0.1)
-                                .build())
-                        .build());
+                        .build() );
         ;
 
-        public final ChatModel model;
+        private final Function<String,ChatModel> modelFactory;
 
-        AiModel(  ChatModel model ) {
-            this.model = model;
+        AiModel(  Function<String,ChatModel> modelFactory ) {
+            this.modelFactory = modelFactory;
+        }
+
+        ChatModel model( String modelName ) {
+            return modelFactory.apply( modelName );
         }
     }
 
@@ -102,7 +111,7 @@ public class StreamingTestITest {
 
     @Test
     public void llmStreamingTest() throws InterruptedException {
-        var chatClient = ChatClient.builder(AiModel.OLLAMA_QWEN2_5_7B.model)
+        var chatClient = ChatClient.builder(AiModel.OLLAMA.model( "qwen2.5:7b"))
                 .defaultOptions(ToolCallingChatOptions.builder()
                         .internalToolExecutionEnabled(false) // Disable automatic tool execution
                         .build())
@@ -121,7 +130,7 @@ public class StreamingTestITest {
 
     @Test
     public void llmStreamingGeneratorTest() throws InterruptedException {
-        var chatClient = ChatClient.builder(AiModel.OLLAMA_QWEN2_5_7B.model)
+        var chatClient = ChatClient.builder(AiModel.OLLAMA.model( "qwen2.5:7b" ))
                 .defaultOptions(ToolCallingChatOptions.builder()
                         .internalToolExecutionEnabled(false) // Disable automatic tool execution
                         .build())
@@ -143,7 +152,7 @@ public class StreamingTestITest {
 
     @Test
     public void llmStreamingGeneratorIteratorTest() throws InterruptedException {
-        var chatClient = ChatClient.builder(AiModel.OLLAMA_QWEN2_5_7B.model)
+        var chatClient = ChatClient.builder(AiModel.OLLAMA.model( "qwen2.5:7b" ))
                 .defaultOptions(ToolCallingChatOptions.builder()
                         .internalToolExecutionEnabled(false) // Disable automatic tool execution
                         .build())
@@ -169,7 +178,7 @@ public class StreamingTestITest {
 
         final var tools = ToolCallbacks.from(new SearchTool());
 
-        final var chatClient = ChatClient.builder(AiModel.OPENAI_GPT_4O_MINI.model)
+        final var chatClient = ChatClient.builder(AiModel.OLLAMA.model( "qwen3"))
                 .defaultOptions(ToolCallingChatOptions.builder()
                         .internalToolExecutionEnabled(false) // Disable automatic tool execution
                         .build())
@@ -187,6 +196,7 @@ public class StreamingTestITest {
                     .chatResponse();
 
             var generator  = StreamingChatGenerator.builder()
+                    .emitStreamingOutputEnd(true)
                     .startingNode("agent")
                     .startingState( state )
                     .mapResult( response -> Map.of( "messages", response.getResult().getOutput()))
@@ -253,6 +263,52 @@ public class StreamingTestITest {
 
         generator.forEachAsync(System.out::println).join();
 
+    }
+
+    @Test
+    public void simpleStreamingGraphTest() throws Exception {
+
+        var chatClient = ChatClient.builder(AiModel.DEEPSEEK.model( "deepseek-chat"))
+                .defaultOptions(ToolCallingChatOptions.builder()
+                        .internalToolExecutionEnabled(false)
+                        .build())
+                .defaultSystem("You are a helpful AI Assistant answering questions.")
+                .build();
+
+        // Define a simple node that uses StreamingChatGenerator
+        NodeAction<State> agentNode = state -> {
+            log.info("AgentNode - messages: {}", state.messages());
+
+            var flux = chatClient.prompt()
+                    .messages(state.messages())
+                    .stream()
+                    .chatResponse();
+
+            var generator = StreamingChatGenerator.builder()
+                    .startingNode("agent")
+                    .startingState(state)
+                    .mapResult(response -> Map.of("messages", response.getResult().getOutput()))
+                    .build(flux);
+
+            return Map.of("messages", generator);
+        };
+
+        // Build a simple graph: START -> agent -> END
+        var workflow = new StateGraph<>(State.SCHEMA, new SpringAIStateSerializer<>(State::new))
+                .addNode("agent", node_async(agentNode))
+                .addEdge(START, "agent")
+                .addEdge("agent", END);
+
+        var app = workflow.compile();
+
+        // Stream and iterate through results
+        var inputStream = app.stream(Map.of("messages", new UserMessage("tell me a short joke")));
+
+        System.out.println("=== Streaming Output ===");
+        for (var item : inputStream) {
+            System.out.println(item);
+        }
+        System.out.println("=== End of Stream ===");
     }
 
 }

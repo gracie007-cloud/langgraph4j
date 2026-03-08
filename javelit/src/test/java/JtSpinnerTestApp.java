@@ -1,4 +1,4 @@
-//DEPS org.bsc.langgraph4j:langgraph4j-javelit:1.8.1
+//DEPS org.bsc.langgraph4j:langgraph4j-javelit:1.8.7
 
 import io.javelit.core.Jt;
 import org.bsc.javelit.SpinnerComponent;
@@ -21,7 +21,7 @@ public class JtSpinnerTestApp {
 
         var overlay = Jt.toggle("overlay").value(false).use();
 
-        Jt.divider("hr1").use();
+        Jt.divider().use();
 
         if( Jt.button("show spinner (use case 1)").use() ) {
 

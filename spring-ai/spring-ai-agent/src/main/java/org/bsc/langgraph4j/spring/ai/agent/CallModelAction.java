@@ -2,13 +2,17 @@ package org.bsc.langgraph4j.spring.ai.agent;
 
 import org.bsc.langgraph4j.RunnableConfig;
 import org.bsc.langgraph4j.action.AsyncNodeActionWithConfig;
+import org.bsc.langgraph4j.agent.ConversationContextPolicy;
 import org.bsc.langgraph4j.prebuilt.MessagesState;
 import org.bsc.langgraph4j.spring.ai.generators.StreamingChatGenerator;
 import org.springframework.ai.chat.messages.Message;
 
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Function;
 
+import static java.util.Objects.requireNonNull;
+import static java.util.Optional.ofNullable;
 import static java.util.concurrent.CompletableFuture.completedFuture;
 import static java.util.concurrent.CompletableFuture.failedFuture;
 
@@ -16,10 +20,16 @@ public class CallModelAction<State extends MessagesState<Message>> implements As
 
     private final ReactAgent.ChatService chatService;
     private final boolean streaming;
+    private final boolean emitStreamingOutputEnd;
+    private final ConversationContextPolicy<Message> conversationContextPolicy;
 
-    public CallModelAction(ReactAgent.ChatService chatService, boolean streaming) {
-        this.chatService = chatService;
-        this.streaming = streaming;
+    public CallModelAction(Function<ReactAgentBuilder<?,?>, ReactAgent.ChatService> chatServiceFactory, ReactAgentBuilder<?,?> builder ) {
+
+        this.chatService = requireNonNull(chatServiceFactory, "chatServiceFactory cannot be null!").apply(builder);
+        this.conversationContextPolicy = builder.conversationContextPolicy;
+        this.streaming = builder.streaming;
+        this.emitStreamingOutputEnd = builder.emitStreamingOutputEnd;
+
     }
 
     /**
@@ -31,7 +41,10 @@ public class CallModelAction<State extends MessagesState<Message>> implements As
     @Override
     public CompletableFuture<Map<String, Object>> apply(State state, RunnableConfig config) {
 
-        var messages = state.messages();
+        final var messages = ofNullable(conversationContextPolicy)
+                .map( policy -> policy.filter(state, config) )
+                .orElseGet(state::messages);
+
 
         if (messages.isEmpty()) {
             return failedFuture( new IllegalArgumentException("no input provided!") );
@@ -41,6 +54,7 @@ public class CallModelAction<State extends MessagesState<Message>> implements As
             var flux = chatService.streamingExecute(messages);
 
             var generator = StreamingChatGenerator.builder()
+                    .emitStreamingOutputEnd(emitStreamingOutputEnd)
                     .startingNode("agent")
                     .startingState(state)
                     .mapResult(response -> Map.of("messages", response.getResult().getOutput()))

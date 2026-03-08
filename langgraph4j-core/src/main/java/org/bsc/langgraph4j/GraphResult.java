@@ -25,7 +25,8 @@ public record GraphResult( Object result, Type type ) {
         INTERRUPTION_METADATA,
         NODE_OUTPUT,
         CHECKPOINT_SAVER_TAG,
-        STATE_DATA
+        STATE_DATA,
+        CANCELLED
     }
 
     private static final GraphResult EMPTY = new GraphResult( null, Type.EMPTY );
@@ -78,6 +79,9 @@ public record GraphResult( Object result, Type type ) {
         if( result instanceof BaseCheckpointSaver.Tag ) {
             return new GraphResult( result, Type.CHECKPOINT_SAVER_TAG);
         }
+        if( result == AsyncGenerator.IsCancellable.CANCELLED ) {
+            return new GraphResult( result, Type.CANCELLED);
+        }
         throw new IllegalArgumentException( "Invalid result type: %s".formatted(result.getClass()) );
     }
 
@@ -105,6 +109,10 @@ public record GraphResult( Object result, Type type ) {
      */
     public boolean isEmpty() {
         return type == Type.EMPTY;
+    }
+
+    public boolean isCancelled() {
+        return type == Type.CANCELLED;
     }
 
     /**

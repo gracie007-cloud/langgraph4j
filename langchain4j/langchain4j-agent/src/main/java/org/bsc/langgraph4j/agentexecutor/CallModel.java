@@ -10,6 +10,7 @@ import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.output.FinishReason;
 import org.bsc.langgraph4j.RunnableConfig;
 import org.bsc.langgraph4j.action.AsyncNodeActionWithConfig;
+import org.bsc.langgraph4j.agent.ConversationContextPolicy;
 import org.bsc.langgraph4j.langchain4j.generators.StreamingChatGenerator;
 import org.bsc.langgraph4j.prebuilt.MessagesState;
 
@@ -27,7 +28,9 @@ public class CallModel<State extends MessagesState<ChatMessage>> implements Asyn
     private final ChatModel chatModel;
     private final StreamingChatModel streamingChatModel;
     private final SystemMessage systemMessage;
+    private final ConversationContextPolicy<ChatMessage> conversationContextPolicy;
     final ChatRequestParameters parameters;
+    final boolean emitStreamingOutputEnd;
 
     /**
      * Constructs a CallAgent with the specified agent.
@@ -38,6 +41,8 @@ public class CallModel<State extends MessagesState<ChatMessage>> implements Asyn
         this.chatModel = builder.chatModel;
         this.streamingChatModel = builder.streamingChatModel;
         this.systemMessage = ofNullable( builder.systemMessage ).orElseGet( () -> SystemMessage.from("You are a helpful assistant") );
+        this.conversationContextPolicy = builder.conversationContextPolicy;
+        this.emitStreamingOutputEnd = builder.emitStreamingOutputEnd;
 
         var parametersBuilder = ChatRequestParameters.builder()
                 .toolSpecifications( builder.toolMap().keySet().stream().toList() );
@@ -103,15 +108,19 @@ public class CallModel<State extends MessagesState<ChatMessage>> implements Asyn
      */
     public Map<String,Object> applySync(State state, RunnableConfig config)  {
         log.trace( "callAgent" );
-        var messages = state.messages();
 
-        if( messages.isEmpty() ) {
+        final var messages = ofNullable(conversationContextPolicy)
+                .map( policy -> policy.filter(state, config) )
+                .orElseGet(state::messages);
+
+        if( messages == null || messages.isEmpty() ) {
             throw new IllegalArgumentException("no input provided!");
         }
 
         if( isStreaming() && !config.isRunningInStudio() ) {
 
             var generator = StreamingChatGenerator.<State>builder()
+                    .emitStreamingOutputEnd(emitStreamingOutputEnd)
                     .mapResult( this::mapResult )
                     .startingNode("agent")
                     .startingState( state )
